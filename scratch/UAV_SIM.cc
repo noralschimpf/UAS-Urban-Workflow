@@ -47,6 +47,7 @@
 #include "ns3/three-gpp-channel-model.h"
 
 using namespace ns3;
+using std::vector;
 
 NS_LOG_COMPONENT_DEFINE ("ThreeGppV2vChannelExample");
 
@@ -86,13 +87,78 @@ main (int argc, char *argv[])
   remoteHostStaticRouting->AddNetworkRouteTo (Ipv4Address ("7.0.0.0"), Ipv4Mask ("255.0.0.0"), 1);
 
   // create lte nodes
-  NodeContainer ueNodes;
+  NodeContainer enbUeNodes;
+  NodeContainer uavUeNode;
   NodeContainer enbNodes;
 
-  ueNodes.Create (1);
-  enbNodes.Create(24);
+  // the following node configuration corresponds to a 8 sq. km (2 km x 4 km)
+  // rather than the initially specified 16 sq. km
+
+  enbNodes.Create(18); // 6 stations with 3 nodes apiece
+  enbUeNodes.Create (18);  // one UE attached per enbUeNode for traffic sim
+  uavUeNode.Create(1);  // single UAV UE node
+
+  // create a grid of buildings
+  double buildingSizeX = 250 - 3.5 * 2 - 3; // m
+  double buildingSizeY = 433 - 3.5 * 2 - 3; // m
+  double streetWidth = 20; // m
+  double buildingHeight = 10; // m
+  double maxAxisX = 4000;
+  double maxAxisY = 2000;
+  uint32_t numBuildingsX = maxAxisX / (buildingSizeX + streetWidth);
+  uint32_t numBuildingsY = maxAxisY / (buildingSizeX + streetWidth);
+
+  vector<Ptr<Building> > buildingVector;
+  for (uint32_t buildingIdX = 0; buildingIdX < numBuildingsX; ++buildingIdX)
+  {
+      for (uint32_t buildingIdY = 0; buildingIdY < numBuildingsY; ++buildingIdY)
+      {
+          Ptr < Building > building;
+          building = CreateObject<Building> ();
+
+          building->SetBoundaries (Box (buildingIdX * (buildingSizeX + streetWidth),
+                                        buildingIdX * (buildingSizeX + streetWidth) + buildingSizeX,
+                                        buildingIdY * (buildingSizeY + streetWidth),
+                                        buildingIdY * (buildingSizeY + streetWidth) + buildingSizeY,
+                                        0.0, buildingHeight));
+          building->SetNRoomsX (1);
+          building->SetNRoomsY (1);
+          building->SetNFloors (1);
+          buildingVector.push_back (building);
+      }
+  }
+
+  BuildingsHelper::Install (enbNodes);
+
+  vector<vector<int>> positions;
+  Ptr<ListPositionAllocator> enbPositionAlloc = CreateObject<ListPositionAllocator> ();
+  Ptr<ListPositionAllocator> enbUePositionAlloc = CreateObject<ListPositionAllocator> ();
 
 
+  positions.push_back({0,0,30});
+  positions.push_back({1600,0,30});
+  positions.push_back({3200,0,30});
+  positions.push_back({800,1380,30});
+  positions.push_back({2400,1380,30});
+  positions.push_back({4000,1380,30});
 
+  for(int i = 0; i < 6; i++)
+  {
+      for(int j = 0; j < 3; j++)
+      {
+            enbPositionAlloc -> Add(positions[i]);
+      }
+
+      enbUePositionAlloc -> Add(positions[i]);
+  }
+
+  mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+
+  mobility.SetPositionAllocator(enbPositionAlloc);
+  mobility.Install(enbNodes);
+
+
+  mobility.SetPositionAllocator(enbUePositionAlloc);
+  mobility.Install(enbUeNodes);
 
 }
