@@ -42,14 +42,19 @@
 #include "ns3/network-module.h"
 #include <fstream>
 #include "ns3/uniform-planar-array.h"
-#include "ns3/three-gpp-spectrum-propagation-loss-model.h"
-#include "ns3/three-gpp-v2v-propagation-loss-model.h"
-#include "ns3/three-gpp-channel-model.h"
-
+#include "ns3/lte-module.h"
+#include "ns3/config-store.h"
+#include <ns3/buildings-propagation-loss-model.h>
+#include <ns3/buildings-helper.h>
+#include <ns3/radio-environment-map-helper.h>
+#include <iomanip>
+#include <string>
+#include <vector>
+#include "ns3/point-to-point-module.h"
+#include "ns3/internet-module.h"
 using namespace ns3;
-using std::vector;
 
-NS_LOG_COMPONENT_DEFINE ("ThreeGppV2vChannelExample");
+NS_LOG_COMPONENT_DEFINE ("UAVSim");
 
 
 int
@@ -80,7 +85,7 @@ main (int argc, char *argv[])
   ipv4h.SetBase ("1.0.0.0", "255.0.0.0");
   Ipv4InterfaceContainer internetIpIfaces = ipv4h.Assign (internetDevices);
   // interface 0 is localhost, 1 is the p2p device
-  Ipv4Address remoteHostAddr = internetIpIfaces.GetAddress (1);
+//  Ipv4Address remoteHostAddr = internetIpIfaces.GetAddress (1);
 
   Ipv4StaticRoutingHelper ipv4RoutingHelper;
   Ptr<Ipv4StaticRouting> remoteHostStaticRouting = ipv4RoutingHelper.GetStaticRouting (remoteHost->GetObject<Ipv4> ());
@@ -108,7 +113,7 @@ main (int argc, char *argv[])
   uint32_t numBuildingsX = maxAxisX / (buildingSizeX + streetWidth);
   uint32_t numBuildingsY = maxAxisY / (buildingSizeX + streetWidth);
 
-  vector<Ptr<Building> > buildingVector;
+  std::vector<Ptr<Building> > buildingVector;
   for (uint32_t buildingIdX = 0; buildingIdX < numBuildingsX; ++buildingIdX)
   {
       for (uint32_t buildingIdY = 0; buildingIdY < numBuildingsY; ++buildingIdY)
@@ -128,19 +133,12 @@ main (int argc, char *argv[])
       }
   }
 
-  BuildingsHelper::Install (enbNodes);
+  std::vector<Vector> positions{Vector(0,0,30),Vector(1600,0,30),Vector(3200,0,30),Vector(800,1380,30),Vector(2400,1380,30),Vector(4000,1380,30)};
 
-  vector<vector<int>> positions;
   Ptr<ListPositionAllocator> enbPositionAlloc = CreateObject<ListPositionAllocator> ();
   Ptr<ListPositionAllocator> enbUePositionAlloc = CreateObject<ListPositionAllocator> ();
 
 
-  positions.push_back({0,0,30});
-  positions.push_back({1600,0,30});
-  positions.push_back({3200,0,30});
-  positions.push_back({800,1380,30});
-  positions.push_back({2400,1380,30});
-  positions.push_back({4000,1380,30});
 
   for(int i = 0; i < 6; i++)
   {
@@ -156,6 +154,8 @@ main (int argc, char *argv[])
 
   mobility.SetPositionAllocator(enbPositionAlloc);
   mobility.Install(enbNodes);
+
+  BuildingsHelper::Install (enbNodes);
 
 
   mobility.SetPositionAllocator(enbUePositionAlloc);
