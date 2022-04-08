@@ -170,7 +170,7 @@ main (int argc, char *argv[])
   Config::SetDefault ("ns3::LteEnbPhy::TxPower", DoubleValue (43.0));
 
   NetDeviceContainer enbDevs;
-  vector <NetDeviceContainer> enbUeDevs;
+  NetDeviceContainer enbUeDevs;
 
   for(int i = 0; i < 18; i += 3)
   {
@@ -179,32 +179,43 @@ main (int argc, char *argv[])
           lteHelper->SetEnbAntennaModelAttribute ("HorizontalBeamwidth", DoubleValue (120));
           lteHelper->SetEnbAntennaModelAttribute ("MaxGain", DoubleValue (0.0));
           enbDevs.Add ( lteHelper->InstallEnbDevice (enbNodes.Get (i)));
-          NetDeviceContainer enbUeDev = lteHelper->InstallUeDevice (enbUeNodes.at(i));
-          enbUeDevs.push_back (enbUeDev);
-          lteHelper->Attach (enbUeDev, enbDevs.Get (i));
-          enum EpsBearer::Qci q = EpsBearer::GBR_CONV_VOICE;
-          EpsBearer bearer (q);
-          lteHelper->ActivateDataRadioBearer (ueDev, bearer);
+          enbUeDevs.Add ( lteHelper->InstallUeDevice (enbUeNodes.Get (i)));
+
+
 
           lteHelper->SetEnbAntennaModelType ("ns3::CosineAntennaModel");
           lteHelper->SetEnbAntennaModelAttribute ("Orientation", DoubleValue (360/3));
           lteHelper->SetEnbAntennaModelAttribute ("HorizontalBeamwidth", DoubleValue (120));
           lteHelper->SetEnbAntennaModelAttribute ("MaxGain", DoubleValue (0.0));
           enbDevs.Add ( lteHelper->InstallEnbDevice (enbNodes.Get (i + 1)));
-          NetDeviceContainer enbUeDev2 = lteHelper->InstallUeDevice (enbUeNodes.at(i+1));
-          enbUeDevs.push_back (enbUeDev2);
-          lteHelper->Attach (enbUeDev2, enbDevs.Get (i + 1));
-          lteHelper->ActivateDataRadioBearer (ueDev, bearer);
+          enbUeDevs.Add ( lteHelper->InstallUeDevice (enbUeNodes.Get (i + 1)));
+
 
           lteHelper->SetEnbAntennaModelType ("ns3::CosineAntennaModel");
           lteHelper->SetEnbAntennaModelAttribute ("Orientation", DoubleValue (2*360/3));
           lteHelper->SetEnbAntennaModelAttribute ("HorizontalBeamwidth", DoubleValue (120));
           lteHelper->SetEnbAntennaModelAttribute ("MaxGain", DoubleValue (0.0));
           enbDevs.Add ( lteHelper->InstallEnbDevice (enbNodes.Get (i + 2)));  
-          NetDeviceContainer enbUeDev3 = lteHelper->InstallUeDevice (enbUeNodes.at(i+2));
-          enbUeDevs.push_back (enbUeDev3);
-          lteHelper->Attach (enbUeDev3, enbDevs.Get (i + 2));
-          lteHelper->ActivateDataRadioBearer (ueDev, bearer);
+          enbUeDevs.Add ( lteHelper->InstallUeDevice (enbUeNodes.Get (i)));
+
   }
 
+  internet.Install(enbUeNodes);
+  Ipv4InterfaceContainer ueIpIface;
+  ueIpIface = epcHelper->AssignUeIpv4Address (NetDeviceContainer (enbUeDevs));
+
+  for(int i = 0; i < 18; i++)
+  {
+      Ptr<Node> ueNode = enbUeNodes.Get (i);
+      // Set the default gateway for the UE
+      Ptr<Ipv4StaticRouting> ueStaticRouting = ipv4RoutingHelper.GetStaticRouting (ueNode->GetObject<Ipv4> ());
+      ueStaticRouting->SetDefaultRoute (epcHelper->GetUeDefaultGatewayAddress (), 1);
+  }
+
+  for(int i = 0; i < 18; i++)
+  {
+      lteHelper->Attach (enbUeDevs.Get(i), enbDevs.Get(i));
+  } 
+
 }
+
