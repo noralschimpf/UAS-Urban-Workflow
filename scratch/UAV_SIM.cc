@@ -56,6 +56,64 @@ using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE ("UAVSim");
 
+void
+PrintGnuplottableBuildingListToFile 
+(std::string dirname, ns3::Ptr<ListPositionAllocator> enbPositionAlloc, ns3::Ptr<ListPositionAllocator> uePositionAlloc)
+{
+  std::ofstream outFile;
+  std::string filename = dirname + "/buildings.txt";
+  outFile.open (filename.c_str (), std::ios_base::out | std::ios_base::trunc);
+  if (!outFile.is_open ())
+    {
+      NS_LOG_ERROR ("Can't open file " << filename);
+      return;
+    }
+  
+  outFile << "building,rectFromX,rectFromY,rectToX,rectToY"<<std::endl;
+
+  uint32_t index = 0;
+  for (BuildingList::Iterator it = BuildingList::Begin (); it != BuildingList::End (); ++it)
+    {
+      ++index;
+      Box box = (*it)->GetBoundaries ();
+    //   outFile << "set object " << index
+    //           << " rect from " << box.xMin  << "," << box.yMin
+    //           << " to "   << box.xMax  << "," << box.yMax
+    //           << std::endl;
+        outFile << index << "," << box.xMin  << "," << box.yMin
+              << ","   << box.xMax  << "," << box.yMax
+              << std::endl;
+    }
+  outFile.close();
+
+
+//   filename = dirname + "/enbs.txt";
+//   outFile.open (filename.c_str (), std::ios_base::out | std::ios_base::trunc);
+//   if (!outFile.is_open ())
+//     {
+//       NS_LOG_ERROR ("Can't open file " << filename);
+//       return;
+//     }
+  
+//   outFile << "enb,X,Y,Z"<<std::endl;
+  
+//   ns3::Object::AggregateIterator iter = enbPositionAlloc->GetAggregateIterator();
+//   for (uint32_t i = 0; i< enbPositionAlloc->GetSize(); i++)
+// //   for (ns3::Object::AggregateIterator iter = enbPositionAlloc->GetAggregateIterator(); iter != enbPositionAlloc->GetSize(); ++iter)
+//   {
+//     {ns3::Ptr<const ns3::Object> pos;
+//     pos = iter.Next();
+//     ns3::Vector vec = enbPositionAlloc->GetNext();
+//     // ns3::Vector vec = (*iter)->GetNext();
+//     // NS_LOG_ERROR("Wherenext?");
+//     // ns3::Vector vec = pos->GetNext();
+//     outFile << i << ',' << vec.x << ',' << vec.y << ',' << vec.z << std::endl;
+//     pos.~Ptr();}
+//     // ~pos
+//   }
+//   outFile.close();
+}
+
 
 int
 main (int argc, char *argv[])
@@ -139,7 +197,6 @@ main (int argc, char *argv[])
   Ptr<ListPositionAllocator> enbUePositionAlloc = CreateObject<ListPositionAllocator> ();
 
 
-
   for(int i = 0; i < 6; i++)
   {
       for(int j = 0; j < 3; j++)
@@ -149,6 +206,8 @@ main (int argc, char *argv[])
 
       enbUePositionAlloc -> Add(positions[i]);
   }
+
+  PrintGnuplottableBuildingListToFile ("scratchlogs/uavsim", enbPositionAlloc, enbUePositionAlloc);
 
   mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
 
