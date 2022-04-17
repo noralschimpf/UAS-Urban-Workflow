@@ -87,9 +87,29 @@ void createBSSMobility(ns3::Ptr<ns3::Node> node, ns3::Vector v)
   node->AggregateObject(bssMob);
 }
 
-
-
-
+std::vector<float> v1;//store packet arrival time
+std::vector<float> v2;//store packet schedule time, used to schedule packet send
+std::vector<int> v3;//store packet size
+int csv_size;//csv entry
+void packetRead()
+{
+//Helper method to load csv packet information into vectors
+    float x = 0.0;
+    int x1 = 0;
+    //adjust path string to host computer.
+    CsvReader csv ("path to directory where file is/CSE-UDP1-Large.csv", ',');
+    while (csv.FetchNextRow()) {  
+        csv.GetValue(0, x); //read time value
+        v1.push_back(x);//store in vector V1
+        csv.GetValue(1, x1); //read packet size value
+        v3.push_back(x1);//store in vector V3
+    }
+    csv_size = v1.size();// number of packets in file
+    v2.push_back(v1.at(0));
+    for (int i =1; i < csv_size; i++){
+       v2.push_back(v1.at(i) - v1.at(i-1)); //packet schedule time, store in vector v2
+    }
+}
 
 int main (int argc, char *argv[])
 {
