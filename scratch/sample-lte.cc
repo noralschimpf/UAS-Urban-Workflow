@@ -1,4 +1,4 @@
-
+#include "ns3/buildings-module.h"
 #include "ns3/core-module.h"
 #include "ns3/point-to-point-module.h"
 #include "ns3/internet-module.h"
@@ -10,6 +10,11 @@
 
 #include "ns3/network-module.h"
 #include "ns3/ipv4-global-routing-helper.h"
+#include "ns3/three-gpp-spectrum-propagation-loss-model.h"
+#include "ns3/three-gpp-v2v-propagation-loss-model.h"
+#include "ns3/three-gpp-channel-model.h"
+
+#include "UAS-Mobility.h"
 
 using namespace ns3;
 
@@ -181,8 +186,91 @@ void RcvPacket(Ptr<const Packet> p, const Address &addr){
 }
 
 
-int
-main (int argc, char *argv[])
+
+void createUASMobility(ns3::Ptr<ns3::Node> node, int scenario, ns3::Time duration)
+{
+  Ptr<MobilityModel> uasMob;
+  // set the mobility model
+  double vTx = vScatt;
+  Time t_count = Seconds (0.0);
+
+  if(scenario==0)
+    { 
+    uasMob = CreateObject<RandomWalk2dMobilityModel>();
+    uasMob->SetAttribute ("Bounds", RectangleValue (Rectangle (-5, 5, -5, 5)));
+    uasMob->SetAttribute ("Speed", StringValue ("ns3::ConstantRandomVariable[Constant=0.1]"));
+    }
+  else
+    {
+    uasMob = CreateObject<WaypointMobilityModel> ();  
+    }
+
+  switch(scenario)
+    {
+    case 1:
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, Vector (maxAxisX / 2 - streetWidth / 2, 1.0, 1.5)));
+      t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, Vector (maxAxisX / 2 - streetWidth / 2, maxAxisY / 2 - streetWidth / 2, 1.5)));
+      t_count += Seconds ((maxAxisX - streetWidth) / 2 / vTx);    
+      break;
+
+    case 2:
+      break;
+
+    case 3:
+      break;
+
+    case 4:
+      break;
+
+    case 5:
+      break;
+
+    default:
+      break;
+
+    }
+
+
+  node->AggregateObject (uasMob);
+  // return uasMob;
+}
+
+
+void createBSSMobility(ns3::Ptr<ns3::Node> node, ns3::Vector v)
+{
+  Ptr<MobilityModel> bssMob;  
+  // set the mobility model
+  bssMob = CreateObject<ConstantPositionMobilityModel>();
+  bssMob->SetPosition(v);
+  node->AggregateObject(bssMob);
+}
+
+std::vector<float> v1;//store packet arrival time
+std::vector<float> v2;//store packet schedule time, used to schedule packet send
+std::vector<int> v3;//store packet size
+int csv_size;//csv entry
+void packetRead()
+{
+//Helper method to load csv packet information into vectors
+    float x = 0.0;
+    int x1 = 0;
+    //adjust path string to host computer.
+    CsvReader csv ("path to directory where file is/CSE-UDP1-Large.csv", ',');
+    while (csv.FetchNextRow()) {  
+        csv.GetValue(0, x); //read time value
+        v1.push_back(x);//store in vector V1
+        csv.GetValue(1, x1); //read packet size value
+        v3.push_back(x1);//store in vector V3
+    }
+    csv_size = v1.size();// number of packets in file
+    v2.push_back(v1.at(0));
+    for (int i =1; i < csv_size; i++){
+       v2.push_back(v1.at(i) - v1.at(i-1)); //packet schedule time, store in vector v2
+    }
+}
+
+int main (int argc, char *argv[])
 {
   uint16_t numNodePairs = 1;//adjusted from 2 for testing
   Time simTime = MilliSeconds (1100);
@@ -192,7 +280,12 @@ main (int argc, char *argv[])
   bool useCa = false;
   bool disableDl = true;
   bool disableUl = false;
+<<<<<<< HEAD
   bool disablePl = true;
+=======
+  bool disablePl = false;
+  bool tracing = false;
+>>>>>>> main
 
   // Command line arguments
   CommandLine cmd (__FILE__);
@@ -204,6 +297,7 @@ main (int argc, char *argv[])
   cmd.AddValue ("disableDl", "Disable downlink data flows", disableDl);
   cmd.AddValue ("disableUl", "Disable uplink data flows", disableUl);
   cmd.AddValue ("disablePl", "Disable data flows between peer UEs", disablePl);
+  cmd.AddValue("tracing", "Enable Packet Capture", tracing);
   cmd.Parse (argc, argv);
 
   ConfigStore inputConfig;
@@ -254,16 +348,23 @@ main (int argc, char *argv[])
   ueNodes.Create (numNodePairs);
 
   // Install Mobility Model
-  Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
-  for (uint16_t i = 0; i < numNodePairs; i++)
-    {
-      positionAlloc->Add (Vector (distance * i, 0, 0));
-    }
-  MobilityHelper mobility;
-  mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
-  mobility.SetPositionAllocator(positionAlloc);
-  mobility.Install(enbNodes);
-  mobility.Install(ueNodes);
+  //TODO: MODIFY WITH V2V EX
+  // Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
+  // for (uint16_t i = 0; i < numNodePairs; i++)
+  //   {
+  //     positionAlloc->Add (Vector (distance * i, 0, 0));
+  //   }
+  // MobilityHelper mobility;
+  // mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
+  // mobility.SetPositionAllocator(positionAlloc);
+  // mobility.Install(enbNodes);
+  // mobility.Install(ueNodes);
+  for(uint32_t i=0; i<ueNodes.GetN(); i++){
+    createUASMobility(ueNodes.Get(i), 0, simTime);
+  }
+  for(uint32_t i=0; i<enbNodes.GetN(); i++){
+    createBSSMobility(enbNodes.Get(i), Vector(distance*i,0,0));
+  }
 
   // Install LTE Devices to the nodes
   NetDeviceContainer enbLteDevs = lteHelper->InstallEnbDevice (enbNodes);
@@ -346,10 +447,16 @@ main (int argc, char *argv[])
   clientApps.Start (MilliSeconds (500));
   lteHelper->EnableTraces ();
   // Uncomment to enable PCAP tracing
+<<<<<<< HEAD
   //p2ph.EnablePcapAll("lena-simple-epc");
   
   Config::ConnectWithoutContext("/NodeList/*/ApplicationList/*/$ns3::PacketSink/Rx", MakeCallback(&RcvPacket));
   
+=======
+  if(tracing){
+  p2ph.EnablePcapAll("scratchlogs/LTE/lena-simple-epc");}
+
+>>>>>>> main
   Simulator::Stop (simTime);
   Simulator::Run ();
 
