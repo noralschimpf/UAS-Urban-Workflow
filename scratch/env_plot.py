@@ -1,3 +1,4 @@
+from cProfile import label
 from matplotlib.collections import PathCollection
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -22,7 +23,15 @@ def main():
     margin=20
     ax.set_xlim(df_bd['rectFromX'].min()-margin, df_bd['rectToX'].max()+margin)
     ax.set_ylim(df_bd['rectFromY'].min()-margin, df_bd['rectToY'].max()+margin)
+
+    df_ue = pd.read_csv("ues.txt")
+    ax.scatter(df_ue['X'], df_ue['Y'], label="UEs")
     
+    df_enb = pd.read_csv("enbs.txt")
+    ax.scatter(df_enb['X'], df_enb['Y'], label="ENBs", alpha=.25)
+    ax.legend()
+    
+    ax.set_title("Physical Environment Layout (t=0)", alpha=.5)
     fig.savefig("env.png")
     fig.clf(); ax.cla(); plt.close()
 
