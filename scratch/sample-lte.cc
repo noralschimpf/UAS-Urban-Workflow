@@ -6,6 +6,7 @@
 #include "ns3/mobility-module.h"
 #include "ns3/config-store-module.h"
 #include "ns3/lte-module.h"
+// #include "math.h"
 //#include "ns3/gtk-config-store.h"
 
 #include "ns3/network-module.h"
@@ -26,55 +27,261 @@ using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE ("Sample_LTE");
 
+ns3::Time constAccelDuration(ns3::Vector3D start, ns3::Vector3D end)
+{
+  //start and end in m, vScatt in m/s
+  
+  double dist; double dur;
+  dist = sqrt(pow(end.x - start.x, 2) + pow(end.y - start.y, 2) + pow(end.z - start.z, 2));
+  dur = vScatt / dist;
+  
+  return ns3::MilliSeconds(1000*dur);
+}
 
-
-void createUASMobility(ns3::Ptr<ns3::Node> node, int scenario, ns3::Time duration)
+ns3::Time createUASMobility(ns3::Ptr<ns3::Node> node, uint16_t scenario, ns3::Time duration)
 {
   Ptr<MobilityModel> uasMob;
   // set the mobility model
-  double vTx = vScatt;
-  Time t_count = Seconds (0.0);
+//   double vTx = vScatt;
+  Time t_count = MilliSeconds (0);
 
   if(scenario==0)
     { 
     uasMob = CreateObject<RandomWalk2dMobilityModel>();
-    uasMob->SetAttribute ("Bounds", RectangleValue (Rectangle (-5, 5, -5, 5)));
-    uasMob->SetAttribute ("Speed", StringValue ("ns3::ConstantRandomVariable[Constant=0.1]"));
+    uasMob->SetAttribute ("Bounds", RectangleValue (Rectangle (0, maxAxisX, 0, maxAxisY)));
+    uasMob->SetAttribute ("Speed", StringValue ("ns3::ConstantRandomVariable[Constant=" + std::to_string(vScatt) + "]"));
+    t_count = duration;
     }
   else
     {
     uasMob = CreateObject<WaypointMobilityModel> ();  
-    }
+    Vector vec1; Vector vec2;
 
   switch(scenario)
     {
+      //TODO: Adjust time duration: t += v/dist
     case 1:
-      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, Vector (maxAxisX / 2 - streetWidth / 2, 1.0, 1.5)));
-      t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
-      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, Vector (maxAxisX / 2 - streetWidth / 2, maxAxisY / 2 - streetWidth / 2, 1.5)));
-      t_count += Seconds ((maxAxisX - streetWidth) / 2 / vTx);    
+      //Scenario: Out-and-back, diagonally, full enb coverage
+      vec1 = Vector(0 + 1*buildingSizeX + 0*streetWidth, 0 + 1*buildingSizeY + 0*streetWidth, buildingHeight);
+
+      vec2 = Vector(0 + 1*buildingSizeX + 0*streetWidth, 0 + 1*buildingSizeY + 0*streetWidth, buildingHeight);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      
+
+      vec1 = vec2;
+      vec2 = Vector (maxAxisX - 1*buildingSizeX - 0*streetWidth, 0 + 3*buildingSizeY + 2*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisX - streetWidth) / 2 / vTx);    
+      
+
+      vec1 = vec2;
+      vec2 = Vector ( 0 + 1*buildingSizeX + 0*streetWidth, 0 + 1*buildingSizeY + 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisX - streetWidth) / 2 / vTx);    
       break;
 
     case 2:
+      //Scenario: recangular loop, along street, within enb coverage
+      vec1 = Vector ( 0 + 1*buildingSizeX + 0.5*streetWidth, 0 + 1*buildingSizeY + 0.5*streetWidth, buildingHeight);
+
+      vec2 = Vector ( 0 + 1*buildingSizeX + 0.5*streetWidth, 0 + 1*buildingSizeY + 0.5*streetWidth, buildingHeight);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( maxAxisX - 1*buildingSizeX - 0.5*streetWidth, 0 + 1*buildingSizeY + 0.5*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( maxAxisX - 1*buildingSizeX - 0.5*streetWidth, 0 + 2*buildingSizeY + 1.5*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( 0 + 1*buildingSizeX + 0.5*streetWidth, 0 + 2*buildingSizeY + 1.5*streetWidth, buildingHeight); 
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( 0 + 1*buildingSizeX + 0.5*streetWidth, 0 + 1*buildingSizeY + 0.5*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
       break;
 
     case 3:
+      //Scenario: Traingular loop, along street, within enb coverage
+      vec1 = Vector ( 0 + 3*buildingSizeX + 2.5*streetWidth, 0 + 2.5*buildingSizeY + 2*streetWidth, buildingHeight);
+      
+      vec2 = Vector ( 0 + 3*buildingSizeX + 2.5*streetWidth, 0 + 2.5*buildingSizeY + 2*streetWidth, buildingHeight);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( 0 + 3*buildingSizeX + 2.5*streetWidth, 0 + 0.5*buildingSizeY + 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( 0 + 7.5*buildingSizeX + 7*streetWidth, 0 + 2.5*buildingSizeY + 2*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( 0 + 3*buildingSizeX + 2.5*streetWidth, 0 + 2.5*buildingSizeY + 2*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
       break;
 
     case 4:
+      //Scenario: out-and-back, diagonally, exits enb coverage
+      vec1 = Vector ( maxAxisX - 1.5*buildingSizeX - 1*streetWidth, 0 + 2.5*buildingSizeY + 2*streetWidth, buildingHeight);
+
+      vec2 = Vector ( maxAxisX - 1.5*buildingSizeX - 1*streetWidth, 0 + 2.5*buildingSizeY + 2*streetWidth, buildingHeight);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( 0 + 2.5*buildingSizeX + 2*streetWidth, maxAxisY - 1.5*buildingSizeY + 1*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( maxAxisX - 1.5*buildingSizeX - 1*streetWidth, 0 + 2.5*buildingSizeY + 2*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
       break;
 
     case 5:
+      //Scenario: Snake across complete map, in-and-out of coverage
+      vec1 = Vector ( 0 + 0.5*buildingSizeX + 0*streetWidth, maxAxisY - 0.5*buildingSizeY - 0*streetWidth, buildingHeight);
+
+      vec2 = Vector ( 0 + 0.5*buildingSizeX + 0*streetWidth, maxAxisY - 0.5*buildingSizeY - 0*streetWidth, buildingHeight);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( 0 + 0.5*buildingSizeX + 0*streetWidth, 0 + 0.5*buildingSizeY + 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+
+      vec2 = Vector ( 0 + 2.5*buildingSizeX + 2*streetWidth, 0 + 0.5*buildingSizeY + 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( 0 + 2.5*buildingSizeX + 2*streetWidth, maxAxisY - 0.5*buildingSizeY - 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+
+      vec2 = Vector ( 0 + 4.5*buildingSizeX + 4*streetWidth, maxAxisY - 0.5*buildingSizeY - 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( 0 + 4.5*buildingSizeX + 4*streetWidth, 0 + 0.5*buildingSizeY + 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+
+
+      vec2 = Vector ( 0 + 6.5*buildingSizeX + 6*streetWidth, 0 + 0.5*buildingSizeY + 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( 0 + 6.5*buildingSizeX + 6*streetWidth, maxAxisY - 0.5*buildingSizeY - 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+
+      vec2 = Vector ( 0 + 8.5*buildingSizeX + 8*streetWidth, maxAxisY - 0.5*buildingSizeY - 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( 0 + 8.5*buildingSizeX + 8*streetWidth, 0 + 0.5*buildingSizeY + 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+
+      vec2 = Vector ( 0 + 10.5*buildingSizeX + 10*streetWidth, 0 + 0.5*buildingSizeY + 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( 0 + 10.5*buildingSizeX + 10*streetWidth, maxAxisY - 0.5*buildingSizeY - 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+
+      vec2 = Vector ( 0 + 12.5*buildingSizeX + 12*streetWidth, maxAxisY - 0.5*buildingSizeY - 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( 0 + 12.5*buildingSizeX + 12*streetWidth, 0 + 0.5*buildingSizeY + 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+
+      vec2 = Vector ( 0 + 14.5*buildingSizeX + 14*streetWidth, 0 + 0.5*buildingSizeY + 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( 0 + 14.5*buildingSizeX + 14*streetWidth, maxAxisY - 0.5*buildingSizeY - 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
       break;
 
     default:
       break;
-
+      }
     }
 
 
   node->AggregateObject (uasMob);
-  // return uasMob;
+  return t_count;
+//   return uasMob;
 }
 
 
@@ -85,6 +292,7 @@ void createBSSMobility(ns3::Ptr<ns3::Node> node, ns3::Vector v)
   bssMob = CreateObject<ConstantPositionMobilityModel>();
   bssMob->SetPosition(v);
   node->AggregateObject(bssMob);
+//   return bssMob;
 }
 
 
@@ -94,7 +302,12 @@ void createBSSMobility(ns3::Ptr<ns3::Node> node, ns3::Vector v)
 int main (int argc, char *argv[])
 {
   uint16_t numNodePairs = 2;
-  Time simTime = MilliSeconds (1100);
+//   uint16_t scenario = 0;
+//   Time simTime = MilliSeconds (1100);
+
+  uint16_t scenario = 1;
+  Time simTime = MilliSeconds (0);
+
   double distance = 60.0;
   Time interPacketInterval = MilliSeconds (100);
   bool useCa = false;
@@ -114,6 +327,7 @@ int main (int argc, char *argv[])
   cmd.AddValue ("disableUl", "Disable uplink data flows", disableUl);
   cmd.AddValue ("disablePl", "Disable data flows between peer UEs", disablePl);
   cmd.AddValue("tracing", "Enable Packet Capture", tracing);
+  cmd.AddValue("scenario", "UAS Flight Path", scenario);
   cmd.Parse (argc, argv);
 
   ConfigStore inputConfig;
@@ -176,7 +390,8 @@ int main (int argc, char *argv[])
   // mobility.Install(enbNodes);
   // mobility.Install(ueNodes);
   for(uint32_t i=0; i<ueNodes.GetN(); i++){
-    createUASMobility(ueNodes.Get(i), 0, simTime);
+    ns3::Time t_uas = createUASMobility(ueNodes.Get(i), scenario, simTime) + MilliSeconds(500);
+    if (t_uas > simTime) {simTime = t_uas;}
   }
   for(uint32_t i=0; i<enbNodes.GetN(); i++){
     createBSSMobility(enbNodes.Get(i), Vector(distance*i,0,0));
