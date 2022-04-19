@@ -11,6 +11,7 @@
 
 #include "ns3/network-module.h"
 #include "ns3/ipv4-global-routing-helper.h"
+#include "ns3/flow-monitor-module.h"
 #include "ns3/three-gpp-spectrum-propagation-loss-model.h"
 #include "ns3/three-gpp-v2v-propagation-loss-model.h"
 #include "ns3/three-gpp-channel-model.h"
@@ -59,7 +60,6 @@ ns3::Time createUASMobility(ns3::Ptr<ns3::Node> node, uint16_t scenario, ns3::Ti
 
   switch(scenario)
     {
-      //TODO: Adjust time duration: t += v/dist
     case 1:
       //Scenario: Out-and-back, diagonally, full enb coverage
       vec1 = Vector(0 + 1*buildingSizeX + 0*streetWidth, 0 + 1*buildingSizeY + 0*streetWidth, buildingHeight);
@@ -378,7 +378,6 @@ int main (int argc, char *argv[])
   ueNodes.Create (numNodePairs);
 
   // Install Mobility Model
-  //TODO: MODIFY WITH V2V EX
   // Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
   // for (uint16_t i = 0; i < numNodePairs; i++)
   //   {
@@ -466,12 +465,18 @@ int main (int argc, char *argv[])
         }
     }
 
+  /**************** FLOW MONITOR can track packet statistics at Layer 3 ********************/
+    /**************** FLOW MONITOR SETUP ********************/
+    Ptr<FlowMonitor> flowmon;
+    FlowMonitorHelper flowmonHelper;
+    flowmon = flowmonHelper.InstallAll();
+    flowmon->CheckForLostPackets ();
+
   serverApps.Start (MilliSeconds (500));
   clientApps.Start (MilliSeconds (500));
   lteHelper->EnableTraces ();
   // Uncomment to enable PCAP tracing
-  if(tracing){
-  p2ph.EnablePcapAll("scratchlogs/LTE/lena-simple-epc");}
+  if(tracing){ p2ph.EnablePcapAll(PREFIX + "lena-simple-epc"); }
 
   Simulator::Stop (simTime);
   Simulator::Run ();
@@ -480,5 +485,7 @@ int main (int argc, char *argv[])
   config.ConfigureAttributes();*/
 
   Simulator::Destroy ();
+
+  flowmon->SerializeToXmlFile(PREFIX + "burst_wifi_ns3.flowmon", true, true);
   return 0;
 }
