@@ -52,6 +52,8 @@
 #include <vector>
 #include "ns3/point-to-point-module.h"
 #include "ns3/internet-module.h"
+#include "ns3/applications-module.h"
+#include <iostream>
 using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE ("UAVSim");
@@ -145,9 +147,9 @@ main (int argc, char *argv[])
       for(int j = 0; j < 3; j++)
       {
             enbPositionAlloc -> Add(positions[i]);
+            enbUePositionAlloc -> Add(positions[i]);
       }
 
-      enbUePositionAlloc -> Add(positions[i]);
   }
 
   mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
@@ -172,7 +174,8 @@ main (int argc, char *argv[])
   NetDeviceContainer enbDevs;
   NetDeviceContainer enbUeDevs;
 
-  for(int i = 0; i < 18; i += 3)
+
+  for(int i = 0; i < 6; i += 3)
   {
           lteHelper->SetEnbAntennaModelType ("ns3::CosineAntennaModel");
           lteHelper->SetEnbAntennaModelAttribute ("Orientation", DoubleValue (0));
@@ -195,27 +198,47 @@ main (int argc, char *argv[])
           lteHelper->SetEnbAntennaModelAttribute ("Orientation", DoubleValue (2*360/3));
           lteHelper->SetEnbAntennaModelAttribute ("HorizontalBeamwidth", DoubleValue (120));
           lteHelper->SetEnbAntennaModelAttribute ("MaxGain", DoubleValue (0.0));
-          enbDevs.Add ( lteHelper->InstallEnbDevice (enbNodes.Get (i + 2)));  
-          enbUeDevs.Add ( lteHelper->InstallUeDevice (enbUeNodes.Get (i)));
+          enbDevs.Add ( lteHelper->InstallEnbDevice (enbNodes.Get (i + 2)));
+          enbUeDevs.Add ( lteHelper->InstallUeDevice (enbUeNodes.Get (i + 2)));
 
   }
 
   internet.Install(enbUeNodes);
-  Ipv4InterfaceContainer ueIpIface;
-  ueIpIface = epcHelper->AssignUeIpv4Address (NetDeviceContainer (enbUeDevs));
 
   for(int i = 0; i < 18; i++)
   {
       Ptr<Node> ueNode = enbUeNodes.Get (i);
+      Ptr<NetDevice> ueDev = enbUeDevs.Get (i);
+      // Add IP info to UEs for Echo Server Traffic
+      Ipv4InterfaceContainer ueIpIface;
+      ueIpIface = epcHelper->AssignUeIpv4Address (NetDeviceContainer (ueDev));
       // Set the default gateway for the UE
       Ptr<Ipv4StaticRouting> ueStaticRouting = ipv4RoutingHelper.GetStaticRouting (ueNode->GetObject<Ipv4> ());
       ueStaticRouting->SetDefaultRoute (epcHelper->GetUeDefaultGatewayAddress (), 1);
+
+      // well-known echo port number
+
+      UdpEchoServerHelper server (9);
+      ApplicationContainer apps = server.Install (enbNodes.Get (i));
+
+      //10: We'll have to futz with these running time values, shouldn't be "too hard" to guess how long a typical run will take
+
+      apps.Start (Seconds (1.0));
+      apps.Stop (Seconds (10.0));
+
+      UdpEchoClientHelper client (ueDev->GetBroadcast(), 9);
+      client.SetAttribute ("MaxPackets", UintegerValue (1));
+      client.SetAttribute ("Interval", TimeValue (Seconds (1.)));
+      client.SetAttribute ("PacketSize", UintegerValue (1024));
+      apps = client.Install (ueNode);
+      //Goto 10
+      apps.Start (Seconds (2.0));
+      apps.Stop (Seconds (10.0));
+
+      lteHelper->Attach (enbUeDevs.Get(i), enbDevs.Get(i));
+
   }
 
-  for(int i = 0; i < 18; i++)
-  {
-      lteHelper->Attach (enbUeDevs.Get(i), enbDevs.Get(i));
-  } 
-
 }
+
 
