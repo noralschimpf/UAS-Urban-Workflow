@@ -109,9 +109,9 @@ main (int argc, char *argv[])
   double buildingSizeX = 250 - 3.5 * 2 - 3; // m
   double buildingSizeY = 433 - 3.5 * 2 - 3; // m
   double streetWidth = 20; // m
-  double buildingHeight = 10; // m
+  double buildingHeight = 20; // m
   double maxAxisX = 4000;
-  double maxAxisY = 2000;
+  double maxAxisY = 4000;
   uint32_t numBuildingsX = maxAxisX / (buildingSizeX + streetWidth);
   uint32_t numBuildingsY = maxAxisY / (buildingSizeX + streetWidth);
 
@@ -123,11 +123,13 @@ main (int argc, char *argv[])
           Ptr < Building > building;
           building = CreateObject<Building> ();
 
+	  double rndht = 10.0 * (double) rand() / (double) RAND_MAX;
+
           building->SetBoundaries (Box (buildingIdX * (buildingSizeX + streetWidth),
                                         buildingIdX * (buildingSizeX + streetWidth) + buildingSizeX,
                                         buildingIdY * (buildingSizeY + streetWidth),
                                         buildingIdY * (buildingSizeY + streetWidth) + buildingSizeY,
-                                        0.0, buildingHeight));
+                                        0.0, buildingHeight + rndht));
           building->SetNRoomsX (1);
           building->SetNRoomsY (1);
           building->SetNFloors (1);
@@ -135,7 +137,7 @@ main (int argc, char *argv[])
       }
   }
 
-  std::vector<Vector> positions{Vector(0,0,30),Vector(1600,0,30),Vector(3200,0,30),Vector(800,1380,30),Vector(2400,1380,30),Vector(4000,1380,30)};
+  std::vector<Vector> positions{Vector(0,0,35),Vector(1600,0,35),Vector(3200,0,35),Vector(800,1380,35),Vector(2400,1380,35),Vector(4000,1380,35)};
 
   Ptr<ListPositionAllocator> enbPositionAlloc = CreateObject<ListPositionAllocator> ();
   Ptr<ListPositionAllocator> enbUePositionAlloc = CreateObject<ListPositionAllocator> ();
