@@ -29,6 +29,166 @@ using namespace ns3;
 
 NS_LOG_COMPONENT_DEFINE ("Sample_LTE");
 
+class MyApp : public Application
+{
+public:
+
+  MyApp ();
+  virtual ~MyApp();
+
+  void Setup (Ptr<Socket> socket, Address address, uint32_t packetSize, uint32_t nPackets, DataRate dataRate);
+  void ChangePacketSize(uint32_t packetSize);
+
+private:
+  virtual void StartApplication (void);
+  virtual void StopApplication (void);
+
+  void LoadCSV (void);//load file
+  void ScheduleTx (void);
+  void SendPacket (void);
+
+  Ptr<Socket>     m_socket;
+  Address         m_peer;
+  uint32_t        m_packetSize;
+  uint32_t        m_nPackets;
+  DataRate        m_dataRate;
+  EventId         m_sendEvent;
+  bool            m_running;
+  uint32_t        m_packetsSent;
+
+};
+
+MyApp::MyApp ()
+  : m_socket (0),
+    m_peer (),
+    m_packetSize (0),
+    m_nPackets (0),
+    m_dataRate (0),
+    m_sendEvent (),
+    m_running (false),
+    m_packetsSent (0)
+{
+}
+
+MyApp::~MyApp()
+{
+  m_socket = 0;
+}
+
+void
+MyApp::Setup (Ptr<Socket> socket, Address address, uint32_t packetSize, uint32_t nPackets, DataRate dataRate)//appId
+{
+  m_socket = socket;
+  m_peer = address;
+  m_packetSize = packetSize;
+  m_nPackets = nPackets;
+  m_dataRate = dataRate;
+  LoadCSV();//load CSV data from file
+}
+
+void
+MyApp::StartApplication (void)
+{
+  std::cout << "Start Application: " << std::endl;
+  m_running = true;
+  //m_packetsSent = 0;
+  m_packetsSent = 1;//+++ new
+  m_socket->Bind ();
+  m_socket->Connect (m_peer);//initiate connection with remote peer using socket
+  SendPacket ();
+}
+
+
+void
+MyApp::StopApplication (void)
+{
+  //std::cout << "Stop Application: " << std::endl;
+  m_running = false;
+
+  if (m_sendEvent.IsRunning ())
+    {
+      Simulator::Cancel (m_sendEvent);
+    }
+
+  if (m_socket)
+    {
+      m_socket->Close ();
+    }
+}
+//Helper method to change packe size 
+void 
+MyApp::ChangePacketSize(uint32_t packetSize) {
+    m_packetSize = packetSize;
+}
+
+std::vector<float> v1;//packet arrival time
+std::vector<float> v2;//packet schedule time
+std::vector<int> v3;//packet size
+int csv_size;//csv entry
+//Helper method to load csv packet information into vectors 
+void
+MyApp::LoadCSV(){//csv entry
+    float x = 0.0;
+    int x1 = 0;
+    //adjust path string to host computer.
+    CsvReader csv ("/Users/rafaapaza/ns-allinone-3.35/ns-3.35/scratch/CSVRead/CSE-UDP1-Large.csv", ',');
+    while (csv.FetchNextRow()) {  
+        csv.GetValue(0, x); //read time value
+        v1.push_back(x);//store in vector V1
+        csv.GetValue(1, x1); //read packet size value
+        v3.push_back(x1);//store in vector V3
+    }
+    csv_size = v1.size();// number of packets in file
+    v2.push_back(v1.at(0));
+    for (int i =1; i < csv_size; i++){
+       v2.push_back(v1.at(i) - v1.at(i-1)); //packet schedule time, store in vector v2
+    }
+}
+
+void
+MyApp::SendPacket (void)
+{
+  SeqTsHeader seqTs;
+  seqTs.SetSeq (m_packetsSent);
+  Ptr<Packet> packet = Create<Packet> (m_packetSize);
+  m_socket->Send (packet);
+
+  if (++m_packetsSent < m_nPackets)
+    {
+      ScheduleTx ();
+    }
+  //std::cout << "SendApp Time: " << Simulator::Now ().GetSeconds () << "\t" << "\t Sent Packet: " << m_packetsSent << "\t Pkt Size: " << m_packetSize << "\t" << "to :" << InetSocketAddress::ConvertFrom(m_peer).GetIpv4 () <<"\n"; 
+}
+
+bool variableBurst;
+bool toggle2 = true;
+int i_var = 0;//packet counter
+
+void
+MyApp::ScheduleTx (void)
+{
+  if (m_running)
+    {
+        if(i_var <= csv_size) { 
+            this ->ChangePacketSize(v3.at(i_var));//packet size update
+            Time tNext (Seconds (v2.at(i_var)));//schedule packet send
+            //std::cout << v2.at(i_var) << " " << i_var << std::endl;//test code
+            m_sendEvent = Simulator::Schedule (tNext, &MyApp::SendPacket, this);
+            i_var++;           
+      }
+    }
+}
+
+void RcvPacket(Ptr<const Packet> p, const Address &addr){
+    /* 
+    * Packet tracking operations in this area
+    */
+    int recv_seq = pkt_counter++;//+++
+
+    //std::cout << "receiving" << std::endl;
+    //std::cout << "ReceiveApp Time:" << Simulator::Now ().GetSeconds () <<  "\t Receive Seq: " << recv_seq << "\t Pkt Size: " << p->GetSize() <<"\t" << "from :" << InetSocketAddress::ConvertFrom(addr).GetIpv4 () << "  at port : " << InetSocketAddress::ConvertFrom(addr).GetPort() <<"\n" ;
+
+}
 
 
 void createUASMobility(ns3::Ptr<ns3::Node> node, int scenario, ns3::Time duration)
@@ -80,7 +240,6 @@ void createUASMobility(ns3::Ptr<ns3::Node> node, int scenario, ns3::Time duratio
   // return uasMob;
 }
 
-
 void createBSSMobility(ns3::Ptr<ns3::Node> node, ns3::Vector v)
 {
   Ptr<MobilityModel> bssMob;  
@@ -90,42 +249,17 @@ void createBSSMobility(ns3::Ptr<ns3::Node> node, ns3::Vector v)
   node->AggregateObject(bssMob);
 }
 
-std::vector<float> v1;//store packet arrival time
-std::vector<float> v2;//store packet schedule time, used to schedule packet send
-std::vector<int> v3;//store packet size
-int csv_size;//csv entry
-
-//Helper function to load csv packet information into vectors
-void packetRead()
-{
-
-    float x = 0.0;
-    int x1 = 0;
-    //adjust path string to host computer.
-    CsvReader csv ("path to directory where file is/CSE-UDP1-Large.csv", ',');
-    while (csv.FetchNextRow()) {  
-        csv.GetValue(0, x); //read time value
-        v1.push_back(x);//store in vector V1
-        csv.GetValue(1, x1); //read packet size value
-        v3.push_back(x1);//store in vector V3
-    }
-    csv_size = v1.size();// number of packets in file
-    v2.push_back(v1.at(0));
-    for (int i =1; i < csv_size; i++){
-       v2.push_back(v1.at(i) - v1.at(i-1)); //packet schedule time, store in vector v2
-    }
-}
-
 int main (int argc, char *argv[])
 {
   uint16_t numNodePairs = 2;
   Time simTime = MilliSeconds (1100);
+  Time appEndTime = MilliSeconds (1000);
   double distance = 60.0;
   Time interPacketInterval = MilliSeconds (100);
   bool useCa = false;
-  bool disableDl = false;
+  bool disableDl = true;
   bool disableUl = false;
-  bool disablePl = false;
+  bool disablePl = true;
   bool tracing = false;
 
   // Command line arguments
@@ -254,13 +388,23 @@ int main (int argc, char *argv[])
       if (!disableUl)
         {
           ++ulPort;
+          Address sinkAddress (InetSocketAddress (remoteHostAddr, ulPort));
+
           PacketSinkHelper ulPacketSinkHelper ("ns3::UdpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), ulPort));
           serverApps.Add (ulPacketSinkHelper.Install (remoteHost));
 
-          UdpClientHelper ulClient (remoteHostAddr, ulPort);
-          ulClient.SetAttribute ("Interval", TimeValue (interPacketInterval));
-          ulClient.SetAttribute ("MaxPackets", UintegerValue (1000000));
-          clientApps.Add (ulClient.Install (ueNodes.Get(u)));
+          //UdpClientHelper ulClient (remoteHostAddr, ulPort);
+          //ulClient.SetAttribute ("Interval", TimeValue (interPacketInterval));
+          //ulClient.SetAttribute ("MaxPackets", UintegerValue (1000000));
+          //clientApps.Add (ulClient.Install (ueNodes.Get(u)));
+
+          Ptr<Socket> ns3UdpSocket = Socket::CreateSocket (ueNodes.Get (u), UdpSocketFactory::GetTypeId ()); //Server at UE create socket
+          Ptr<MyApp> app2 = CreateObject<MyApp> ();
+          app2->Setup (ns3UdpSocket, sinkAddress, 1400, 2511, DataRate ("1Mbps"));//+++UE socket, peer address, pkt size 1400
+          ueNodes.Get (u)->AddApplication (app2);//+++connect app1 to ue: internetIpIfaces.GetAddress(0)
+
+          app2->SetStartTime (MilliSeconds (0));
+          app2->SetStopTime (appEndTime);
         }
 
       if (!disablePl && numNodePairs > 1)
@@ -276,13 +420,15 @@ int main (int argc, char *argv[])
         }
     }
 
-  serverApps.Start (MilliSeconds (500));
-  clientApps.Start (MilliSeconds (500));
+  serverApps.Start (MilliSeconds (50));
+  clientApps.Start (MilliSeconds (50));
   lteHelper->EnableTraces ();
+
   // Uncomment to enable PCAP tracing
   if(tracing){
   p2ph.EnablePcapAll("scratchlogs/LTE/lena-simple-epc");}
-
+  Config::ConnectWithoutContext("/NodeList/*/ApplicationList/*/$ns3::PacketSink/Rx", MakeCallback(&RcvPacket));
+  
   Simulator::Stop (simTime);
   Simulator::Run ();
 
