@@ -67,6 +67,7 @@ main (int argc, char *argv[])
   PointToPointHelper p2ph;
   Ptr<PointToPointEpcHelper> epcHelper = CreateObject<PointToPointEpcHelper> ();
   lteHelper->SetEpcHelper (epcHelper);
+  lteHelper->SetAttribute ("PathlossModel", StringValue ("ns3::FriisPropagationLossModel"));
   MobilityHelper mobility;
   Ipv4AddressHelper ipv4h;
 
