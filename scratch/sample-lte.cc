@@ -300,6 +300,7 @@ void createBSSMobility(ns3::Ptr<ns3::Node> node, ns3::Vector v)
 
 
 
+
 int main (int argc, char *argv[])
 {
   uint16_t numNodePairs = 2;
@@ -307,15 +308,15 @@ int main (int argc, char *argv[])
   Time simTime = MilliSeconds (1100);
 
   double distance = 60.0;
-  Time interPacketInterval = MilliSeconds (100);
+  Time interPacketInterval = MilliSeconds (10);
   bool useCa = false;
   bool disableDl = false;
   bool disableUl = false;
   bool disablePl = false;
   bool tracing = false;
 
-  scenario = 2;
-  simTime = MilliSeconds (0);
+  scenario = 3;
+  // simTime = MilliSeconds (0);
   tracing = true;
 
   // Command line arguments
@@ -372,6 +373,8 @@ int main (int argc, char *argv[])
 
   Ipv4StaticRoutingHelper ipv4RoutingHelper;
   Ptr<Ipv4StaticRouting> remoteHostStaticRouting = ipv4RoutingHelper.GetStaticRouting (remoteHost->GetObject<Ipv4> ());
+  remoteHostStaticRouting->TraceConnectWithoutContext("Drop", MakeCallback(&IpDropTrace));
+  remoteHostStaticRouting->TraceConnectWithoutContext("Tx", MakeCallback(&ipTxTrace));
   remoteHostStaticRouting->AddNetworkRouteTo (Ipv4Address ("7.0.0.0"), Ipv4Mask ("255.0.0.0"), 1);
 
   NodeContainer ueNodes;
@@ -379,17 +382,6 @@ int main (int argc, char *argv[])
   enbNodes.Create (numNodePairs);
   ueNodes.Create (numNodePairs);
 
-  // Install Mobility Model
-  // Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
-  // for (uint16_t i = 0; i < numNodePairs; i++)
-  //   {
-  //     positionAlloc->Add (Vector (distance * i, 0, 0));
-  //   }
-  // MobilityHelper mobility;
-  // mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
-  // mobility.SetPositionAllocator(positionAlloc);
-  // mobility.Install(enbNodes);
-  // mobility.Install(ueNodes);
   for(uint32_t i=0; i<ueNodes.GetN(); i++){
     ns3::Time t_uas = createUASMobility(ueNodes.Get(i), scenario, simTime) + MilliSeconds(500);
     if (t_uas > simTime) {simTime = t_uas;}
@@ -436,10 +428,18 @@ int main (int argc, char *argv[])
           PacketSinkHelper dlPacketSinkHelper ("ns3::UdpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), dlPort));
           serverApps.Add (dlPacketSinkHelper.Install (ueNodes.Get (u)));
 
-          UdpClientHelper dlClient (ueIpIface.GetAddress (u), dlPort);
-          dlClient.SetAttribute ("Interval", TimeValue (interPacketInterval));
+          // UdpClientHelper dlClient (ueIpIface.GetAddress (u), dlPort);
+          // dlClient.SetAttribute ("Interval", TimeValue (interPacketInterval));
+          // dlClient.SetAttribute ("MaxPackets", UintegerValue (1000000));
+          // clientApps.Add (dlClient.Install (remoteHost));
+          UdpEchoClientHelper dlClient (ueIpIface.GetAddress(u), dlPort);
           dlClient.SetAttribute ("MaxPackets", UintegerValue (1000000));
-          clientApps.Add (dlClient.Install (remoteHost));
+          dlClient.SetAttribute ("Interval", TimeValue(interPacketInterval));
+          dlClient.SetAttribute ("PacketSize", UintegerValue (1024));
+
+          ApplicationContainer clientApps = dlClient.Install(remoteHost);
+          clientApps.Start (Seconds (2.0));
+          clientApps.Stop (Seconds (10.0));
         }
 
       if (!disableUl)
@@ -448,10 +448,18 @@ int main (int argc, char *argv[])
           PacketSinkHelper ulPacketSinkHelper ("ns3::UdpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), ulPort));
           serverApps.Add (ulPacketSinkHelper.Install (remoteHost));
 
-          UdpClientHelper ulClient (remoteHostAddr, ulPort);
-          ulClient.SetAttribute ("Interval", TimeValue (interPacketInterval));
+          // UdpClientHelper ulClient (remoteHostAddr, ulPort);
+          // ulClient.SetAttribute ("Interval", TimeValue (interPacketInterval));
+          // ulClient.SetAttribute ("MaxPackets", UintegerValue (1000000));
+          // clientApps.Add (ulClient.Install (ueNodes.Get(u)));
+          UdpEchoClientHelper ulClient (remoteHostAddr, ulPort);
           ulClient.SetAttribute ("MaxPackets", UintegerValue (1000000));
-          clientApps.Add (ulClient.Install (ueNodes.Get(u)));
+          ulClient.SetAttribute ("Interval", TimeValue(interPacketInterval));
+          ulClient.SetAttribute ("PacketSize", UintegerValue (1024));
+
+          ApplicationContainer clientApps = ulClient.Install(ueNodes.Get(u));
+          clientApps.Start (Seconds (2.0));
+          clientApps.Stop (Seconds (10.0));
         }
 
       if (!disablePl && numNodePairs > 1)
@@ -463,6 +471,7 @@ int main (int argc, char *argv[])
           UdpClientHelper client (ueIpIface.GetAddress (u), otherPort);
           client.SetAttribute ("Interval", TimeValue (interPacketInterval));
           client.SetAttribute ("MaxPackets", UintegerValue (1000000));
+          
           clientApps.Add (client.Install (ueNodes.Get ((u + 1) % numNodePairs)));
         }
     }
@@ -478,47 +487,72 @@ int main (int argc, char *argv[])
 
   serverApps.Start (MilliSeconds (500));
   clientApps.Start (MilliSeconds (500));
+  serverApps.Stop  (simTime);
+  clientApps.Stop  (simTime);
 
-  // TODO: CONNECT TRACESOURCES WITHOUT CONTEXT:
-  //   - Ipv4L3Protocol: Drop
-  //   - udp: (UdpEchoClient: Rx) (UdpEchoServer: Rx)
-  //   - Rlc: TxDrop
-  //   - rrc: (eNB: HandoverStart, HandoverEndOk, RrcTimeout) (Ue: StateTransition, InitialCellSelectionEndError, ConnectionTimeout, HandoverStart, HandoverEndOk, HandoverEndError)
-  //   - frame/mac: (ENB) (UE: RaResponseTimeout)
-  //   - phy: (ENB: ReportUeSinr) (UE: ReportCurrentCellRsrpSinr, ReportUeMeasurements, UlPhyTransmission?) 
-  //          (Spectrum: RxEndError, dlPhyReception, ulPhyReception)
   
-  // Uncomment to enable PCAP tracing
-  AsciiTraceHelper ascii;
+  //--------------------------------------//
+  //----------SIMULATION LOGGING----------//
+  //--------------------------------------//
+  AsciiTraceHelper ascii; std::string callbackFile = PREFIX + "uavsim.cb";
   if(tracing)
   { 
-    // Config::ConnectWithoutContext("CongestionWindow", MakeCallback(&CwndChange));
+    //touch logfile
+    std::ofstream touchfile; 
+    touchfile.open(callbackFile, std::ios_base::openmode::_S_trunc);
+    if(!touchfile) {NS_LOG_ERROR("Cannot open " + callbackFile); exit(1);}
+    touchfile.close();
+
+    //enable automated traces    
+    lteHelper->EnableTraces ();
+    p2ph.EnablePcapAll(PREFIX + "lena-simple-epc", true); 
+    p2ph.EnableAsciiAll(ascii.CreateFileStream(PREFIX + "uavsim.ascii"));
+
 
     // IPV4 / UDP Traces
-    // Config::ConnectWithoutContext("Rx", MakeCallback(&UdpRxTrace));
-    Config::ConnectWithoutContext("/NodeList/*/$ns3::Ipv4L3Protocol/Drop", MakeCallback(&IpDropTrace));
+    std::string udpClientPrefix = "/NodeList/*/ApplicationList/*/$ns3::UdpEchoClient/";
+    std::string udpServerPrefix = "/NodeList/*/ApplicationList/*/$ns3::UdpEchoServer/";
+    std::string udpSocketPrefix = "/NodeList/*/$ns3::UdpL4Protocol/SocketList/*/";
+    // std::string ipPrefix = "/NodeList/*/$ns3::Ipv4L3Protocol/";
+
+    Config::ConnectWithoutContext(udpClientPrefix + "Rx", MakeBoundCallback(&UdpRxTrace, callbackFile));
+    Config::ConnectWithoutContext(udpClientPrefix + "Tx", MakeBoundCallback(&UdpTxTrace, callbackFile));
+    Config::ConnectWithoutContext(udpSocketPrefix + "Drop", MakeBoundCallback(&udpDropTrace, callbackFile));
+    // Config::ConnectWithoutContext(udpServerPrefix + "Rx", MakeCallback(&UdpRxTrace));
+    // Config::Connect(ipPrefix + "Drop", MakeCallback(&IpDropTrace));
+    // Config::Connect(ipPrefix + "Tx", MakeCallback(&ipTxTrace));
+    
+    
+    // Config::Connect("/NodeList/*/ApplicationList/*/$ns3::UdpEchoClient/RxWithAddresses", MakeCallback(&RxTrace));
 
     //RLC/RRC Traces
-    // Config::ConnectWithoutContext("TxDrop", MakeCallback(&TxDropTrace));
-    // Config::ConnectWithoutContext("HandoverStart", MakeCallback(&HandoverStartTrace));
-    // Config::ConnectWithoutContext("HandoverEndOk", MakeCallback(&HandoverEndOkTrace));
-    // Config::ConnectWithoutContext("HandoverEndError", MakeCallback(&HandoverEndErrorTrace));
-    // Config::ConnectWithoutContext("RrcTimeout", MakeCallback(&RrcTimeoutTrace));
-    // Config::ConnectWithoutContext("StateTransition", MakeCallback(&StateTransitionTrace));
-    // Config::ConnectWithoutContext("InitialCellSelectionEndError", MakeCallback(&InitCellSelectErrTrace));
-    // Config::ConnectWithoutContext("ConnectionTimeout", MakeCallback(&ConnectionTimeoutTrace));
+    std::string ueRrcPrefix = "/NodeList/*/DeviceList/*/$ns3::LteUeNetDevice/LteUeRrc/";
+    std::string enbRrcPrefix = "/NodeList/*/DeviceList/*/$ns3::LteEnbNetDevice/LteEnbRrc/" ;
+    std::string lteRlcPrefix = "/NodeList/*/TxDrop/DeviceList/$nse::LteNetDevice/LteUeRrc/DataRadioBearerMap/*/LteRlc/";
+    
+    // Config::ConnectWithoutContext(lteRlcPrefix + "RxDrop", MakeCallback(&TxDropTrace));
+    Config::ConnectWithoutContext(ueRrcPrefix + "HandoverStart", MakeBoundCallback(&HandoverStartTrace, callbackFile));
+    Config::ConnectWithoutContext(ueRrcPrefix + "HandoverEndOk", MakeBoundCallback(&HandoverEndOkTrace, callbackFile));
+    Config::ConnectWithoutContext(ueRrcPrefix + "HandoverEndError", MakeBoundCallback(&HandoverEndErrorTrace, callbackFile));
+    // Config::ConnectWithoutContext(enbRrcPrefix + "ConnectionTimeout", MakeCallback(&RrcTimeoutTrace));
+    Config::ConnectWithoutContext(ueRrcPrefix + "StateTransition", MakeBoundCallback(&StateTransitionTrace, callbackFile));
+    Config::ConnectWithoutContext(ueRrcPrefix + "InitialCellSelectionEndError", MakeBoundCallback(&InitCellSelectErrTrace, callbackFile));
+    Config::ConnectWithoutContext(ueRrcPrefix + "ConnectionTimeout", MakeBoundCallback(&ConnectionTimeoutTrace, callbackFile));
+
+
 
     // //MAC and PHY Traces
-    // Config::ConnectWithoutContext("RaResponseTimeout", MakeCallback(&RaResponseTimeoutTrace));
-    // Config::ConnectWithoutContext("ReportUeMeasurements", MakeCallback(&UeMeasTrace));
-    // Config::ConnectWithoutContext("ReportCurrentCellRsrpSinr", MakeCallback(&CellRsrpSinrTrace));
-    // Config::ConnectWithoutContext("RxEndError", MakeCallback(&RxEndErrorTrace));
+    std::string uePhyPrefix = "/NodeList/*/DeviceList/*/$ns3::LteUeNetDevice/ComponentCarrierMapUe/*/LteUePhy/";
+    std::string lteSpectrumPrefixDl =  "/NodeList/*/DeviceList/*/$ns3::LteUeNetDevice/ComponentCarrierMapUe/*/LteUePhy/DlSpectrumPhy/" ;
+    std::string lteSpectrumPrefixUl =  "/NodeList/*/DeviceList/*/$ns3::LteUeNetDevice/ComponentCarrierMapUe/*/LteUePhy/UlSpectrumPhy/" ;
+    std::string lteMacPrefix = "/NodeList/*/DeviceList/*/$ns3::LteUeNetDevice/ComponentCarrierMapUe/*/LteUeMac/";
+
+    Config::ConnectWithoutContext(lteMacPrefix + "RaResponseTimeout", MakeBoundCallback(&RaResponseTimeoutTrace, callbackFile));
+    Config::ConnectWithoutContext(uePhyPrefix + "ReportUeMeasurements", MakeBoundCallback(&UeMeasTrace, callbackFile));
+    Config::ConnectWithoutContext(uePhyPrefix + "ReportCurrentCellRsrpSinr", MakeBoundCallback(&CellRsrpSinrTrace, callbackFile));
+    Config::ConnectWithoutContext(lteSpectrumPrefixDl + "RxEndError", MakeBoundCallback(&RxEndErrorTrace, callbackFile));
+    Config::ConnectWithoutContext(lteSpectrumPrefixUl + "RxEndError", MakeBoundCallback(&RxEndErrorTrace, callbackFile));
     // Config::ConnectWithoutContext("dl", MakeCallback(&HandoverEndOkTrace));
-
-
-    lteHelper->EnableTraces ();
-    p2ph.EnablePcapAll(PREFIX + "lena-simple-epc"); 
-    p2ph.EnableAsciiAll(ascii.CreateFileStream(PREFIX + "CallbackTraces.tr"));
     }
 
   Simulator::Stop (simTime);
@@ -529,6 +563,6 @@ int main (int argc, char *argv[])
 
   Simulator::Destroy ();
 
-  if(tracing){flowmon->SerializeToXmlFile(PREFIX + "burst_wifi_ns3.flowmon", true, true);}
+  if(tracing){flowmon->SerializeToXmlFile(PREFIX + "uavsim.flowmon", true, true);}
   return 0;
 }
