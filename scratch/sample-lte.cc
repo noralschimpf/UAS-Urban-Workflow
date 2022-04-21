@@ -17,6 +17,7 @@
 #include "ns3/three-gpp-channel-model.h"
 
 #include "UAS-Mobility.h"
+#include "QoS-Metrics.h"
 
 using namespace ns3;
 
@@ -26,7 +27,7 @@ using namespace ns3;
  * It also starts another flow between each UE pair.
  */
 
-NS_LOG_COMPONENT_DEFINE ("Sample_LTE");
+// NS_LOG_COMPONENT_DEFINE ("FinalProject");
 
 ns3::Time constAccelDuration(ns3::Vector3D start, ns3::Vector3D end)
 {
@@ -302,11 +303,8 @@ void createBSSMobility(ns3::Ptr<ns3::Node> node, ns3::Vector v)
 int main (int argc, char *argv[])
 {
   uint16_t numNodePairs = 2;
-//   uint16_t scenario = 0;
-//   Time simTime = MilliSeconds (1100);
-
-  uint16_t scenario = 1;
-  Time simTime = MilliSeconds (0);
+  uint16_t scenario = 0;
+  Time simTime = MilliSeconds (1100);
 
   double distance = 60.0;
   Time interPacketInterval = MilliSeconds (100);
@@ -315,6 +313,10 @@ int main (int argc, char *argv[])
   bool disableUl = false;
   bool disablePl = false;
   bool tracing = false;
+
+  scenario = 2;
+  simTime = MilliSeconds (0);
+  tracing = true;
 
   // Command line arguments
   CommandLine cmd (__FILE__);
@@ -467,16 +469,57 @@ int main (int argc, char *argv[])
 
   /**************** FLOW MONITOR can track packet statistics at Layer 3 ********************/
     /**************** FLOW MONITOR SETUP ********************/
-    Ptr<FlowMonitor> flowmon;
-    FlowMonitorHelper flowmonHelper;
+  Ptr<FlowMonitor> flowmon;
+  FlowMonitorHelper flowmonHelper;
+  if(tracing){
     flowmon = flowmonHelper.InstallAll();
     flowmon->CheckForLostPackets ();
+  }
 
   serverApps.Start (MilliSeconds (500));
   clientApps.Start (MilliSeconds (500));
-  lteHelper->EnableTraces ();
+
+  // TODO: CONNECT TRACESOURCES WITHOUT CONTEXT:
+  //   - Ipv4L3Protocol: Drop
+  //   - udp: (UdpEchoClient: Rx) (UdpEchoServer: Rx)
+  //   - Rlc: TxDrop
+  //   - rrc: (eNB: HandoverStart, HandoverEndOk, RrcTimeout) (Ue: StateTransition, InitialCellSelectionEndError, ConnectionTimeout, HandoverStart, HandoverEndOk, HandoverEndError)
+  //   - frame/mac: (ENB) (UE: RaResponseTimeout)
+  //   - phy: (ENB: ReportUeSinr) (UE: ReportCurrentCellRsrpSinr, ReportUeMeasurements, UlPhyTransmission?) 
+  //          (Spectrum: RxEndError, dlPhyReception, ulPhyReception)
+  
   // Uncomment to enable PCAP tracing
-  if(tracing){ p2ph.EnablePcapAll(PREFIX + "lena-simple-epc"); }
+  AsciiTraceHelper ascii;
+  if(tracing)
+  { 
+    // Config::ConnectWithoutContext("CongestionWindow", MakeCallback(&CwndChange));
+
+    // IPV4 / UDP Traces
+    // Config::ConnectWithoutContext("Rx", MakeCallback(&UdpRxTrace));
+    Config::ConnectWithoutContext("/NodeList/*/$ns3::Ipv4L3Protocol/Drop", MakeCallback(&IpDropTrace));
+
+    //RLC/RRC Traces
+    // Config::ConnectWithoutContext("TxDrop", MakeCallback(&TxDropTrace));
+    // Config::ConnectWithoutContext("HandoverStart", MakeCallback(&HandoverStartTrace));
+    // Config::ConnectWithoutContext("HandoverEndOk", MakeCallback(&HandoverEndOkTrace));
+    // Config::ConnectWithoutContext("HandoverEndError", MakeCallback(&HandoverEndErrorTrace));
+    // Config::ConnectWithoutContext("RrcTimeout", MakeCallback(&RrcTimeoutTrace));
+    // Config::ConnectWithoutContext("StateTransition", MakeCallback(&StateTransitionTrace));
+    // Config::ConnectWithoutContext("InitialCellSelectionEndError", MakeCallback(&InitCellSelectErrTrace));
+    // Config::ConnectWithoutContext("ConnectionTimeout", MakeCallback(&ConnectionTimeoutTrace));
+
+    // //MAC and PHY Traces
+    // Config::ConnectWithoutContext("RaResponseTimeout", MakeCallback(&RaResponseTimeoutTrace));
+    // Config::ConnectWithoutContext("ReportUeMeasurements", MakeCallback(&UeMeasTrace));
+    // Config::ConnectWithoutContext("ReportCurrentCellRsrpSinr", MakeCallback(&CellRsrpSinrTrace));
+    // Config::ConnectWithoutContext("RxEndError", MakeCallback(&RxEndErrorTrace));
+    // Config::ConnectWithoutContext("dl", MakeCallback(&HandoverEndOkTrace));
+
+
+    lteHelper->EnableTraces ();
+    p2ph.EnablePcapAll(PREFIX + "lena-simple-epc"); 
+    p2ph.EnableAsciiAll(ascii.CreateFileStream(PREFIX + "CallbackTraces.tr"));
+    }
 
   Simulator::Stop (simTime);
   Simulator::Run ();
@@ -486,6 +529,6 @@ int main (int argc, char *argv[])
 
   Simulator::Destroy ();
 
-  flowmon->SerializeToXmlFile(PREFIX + "burst_wifi_ns3.flowmon", true, true);
+  if(tracing){flowmon->SerializeToXmlFile(PREFIX + "burst_wifi_ns3.flowmon", true, true);}
   return 0;
 }
