@@ -207,8 +207,7 @@ class Simulation(object):
 
 def main(argv):
     file_obj = open(argv[1])
-    outdir = os.path.split('file_obj.name')[0] + '/'
-    # print(file_obj); print(os.path.split(file_obj.name))
+    outdir = os.path.split(file_obj.name)[0] + '/'
     print("Reading XML file ", end=" ")
  
     sys.stdout.flush()        
@@ -273,20 +272,22 @@ def main(argv):
             if not flow.delaySum is None: delSum = "{:.2f} ms".format(flow.delaySum*1e3)
             if not flow.jitterSum is None: jitSum = "{:.2e} ms".format(flow.jitterSum*1e3)
             print("\t\tSum Delay {}\t\t\tSum Jitter: {}".format(delSum, jitSum))
-            fig, ax = plt.subplots(1,1)
+            fig, ax = plt.subplots(1,2)
             if not flow.delayHist is None: 
                 start, width, count = [], [], []
                 for x in flow.delayHist.bins: start.append(x[0]*1e3); width.append(x[1]*1e3); count.append(x[2])
-                ax.bar(x=start, height=count, width=width, label="Delay", alpha=.5)
+                ax[0].bar(x=start, height=count, width=width, label="Delay", alpha=.5)
             if not flow.jitterHist is None:
                 start, width, count = [], [], []
                 for x in flow.jitterHist.bins: start.append(x[0]*1e3); width.append(x[1]*1e3); count.append(x[2])
-                ax.bar(x=start, height=count, width=width, label="Jitter", alpha=.5)
-            ax.legend()
+                ax[1].bar(x=start, height=count, width=width, label="Jitter", alpha=.5)
+            # ax.legend()
             title = "Flow" + str(flow.flowId) + " Delay and Jitter Histograms"
-            ax.set_title(title); ax.set_xlabel("ms"); ax.set_ylabel("count")
+            fig.suptitle(title)
+            ax[0].set_xlabel("Delay (ms)"); ax[0].set_ylabel("count")
+            ax[1].set_xlabel("Jitter (ms)")
             fig.savefig(outdir + title + ".png", dpi=300)
-            fig.clf(); ax.cla(); plt.close()
+            fig.clf(); ax[0].cla(); ax[1].cla(); plt.close()
             
             
             # else:

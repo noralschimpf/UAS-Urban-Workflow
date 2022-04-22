@@ -172,7 +172,8 @@ UeMeasTrace(std::string outfile, uint16_t rnti, uint16_t cellId, double rsrp, do
   std::ofstream of;
   of.open(outfile, std::ios_base::openmode::_S_app);
   if(!of){NS_LOG_ERROR("CANNOT OPEN LOGFILE");}
-  of << Simulator::Now() << ", UE PHY Measurement Report"  << std::endl;
+  of << Simulator::Now() << ", UE PHY Measurement Report, CellID, " << cellId 
+      << ", isServing, " << isServingCell << ", RSRQ, " << rsrq << std::endl;
   of.close();
 }
 
@@ -182,7 +183,7 @@ CellRsrpSinrTrace(std::string outfile, uint16_t cellId, uint16_t rnti, double rs
   std::ofstream of;
   of.open(outfile, std::ios_base::openmode::_S_app);
   if(!of){NS_LOG_ERROR("CANNOT OPEN LOGFILE");}
-  of << Simulator::Now() << ", UE RSRP/SINR Report"  << std::endl;
+  of << Simulator::Now() << ", UE RSRP/SINR Report, CellID, " << cellId << ", RSRP, " << rsrp << ", SINR, " << sinr << std::endl;
   of.close();
 }
 
