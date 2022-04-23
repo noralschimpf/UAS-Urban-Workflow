@@ -159,13 +159,37 @@ HandoverEndErrorTrace(std::string outfile, const uint64_t imsi, const uint16_t c
 //   std::cout << "RRC Timeout";
 // }
 
+std::string stateUnravel(ns3::LteUeRrc::State state)
+{
+  switch(state)
+  {
+    case 0: return "IDLE_START";
+    case 1: return "IDLE_CELL_SEARCH";
+    case 2: return "IDLE_WAIT_MIB_SIB1";
+    case 3: return "IDLE_WAIT_MIB";
+    case 4: return "IDLE_WAIT_SIB1";
+    case 5: return "IDLE_CAMPED_NORMALLY";
+    case 6: return "IDLE_WAIT_SIB2";
+    case 7: return "IDLE_RANDOM_ACCESS";
+    case 8: return "IDLE_CONNECTING";
+    case 9: return "CONNECTED_NORMALLY";
+    case 10: return "CONNECTED_HANDOVER";
+    case 11: return "CONNECTED_PHY_PROBLEM";
+    case 12: return "CONNECTED_REESTABLISHING";
+    case 13: return "NUM_STATES";
+    default: return "NO STATE FOUND";
+    }
+}
+
 static void
 StateTransitionTrace(std::string outfile, uint64_t imsi, uint16_t cellId, uint16_t rnti, ns3::LteUeRrc::State oldstate, ns3::LteUeRrc::State newstate)
 {
   std::stringbuf os;
   std::ostream argpass = std::ostream(&os);
+  std::string oldstr, newstr;
   argpass << "\"Time\", " << "\"" << Simulator::Now() << "\"" << ", \"Event\", \"RRC State Transition\", \"IMSI\", " << imsi << ", "
-          << "\"RNTI\", " << rnti << ", \"Cell\", " << cellId << ", \"Old State\", " << oldstate << ", \"New State\", " << newstate;
+          << "\"RNTI\", " << rnti << ", \"Cell\", " << cellId << ", \"Old State\", \"" 
+          << stateUnravel(oldstate) << "\", \"New State\", \"" << stateUnravel(newstate) << "\"";
   toJson(&argpass, outfile);
 }
 
