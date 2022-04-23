@@ -15,6 +15,7 @@
 #include "ns3/three-gpp-spectrum-propagation-loss-model.h"
 #include "ns3/three-gpp-v2v-propagation-loss-model.h"
 #include "ns3/three-gpp-channel-model.h"
+#include "ns3/spectrum-helper.h"
 
 #include "UAS-Mobility.h"
 #include "QoS-Metrics.h"
@@ -308,7 +309,7 @@ int main (int argc, char *argv[])
   Time simTime = MilliSeconds (1100);
 
   double distance = 60.0;
-  Time interPacketInterval = MilliSeconds (10);
+  Time interPacketInterval = MilliSeconds (100);
   bool useCa = false;
   bool disableDl = false;
   bool disableUl = false;
@@ -373,8 +374,8 @@ int main (int argc, char *argv[])
 
   Ipv4StaticRoutingHelper ipv4RoutingHelper;
   Ptr<Ipv4StaticRouting> remoteHostStaticRouting = ipv4RoutingHelper.GetStaticRouting (remoteHost->GetObject<Ipv4> ());
-  remoteHostStaticRouting->TraceConnectWithoutContext("Drop", MakeCallback(&IpDropTrace));
-  remoteHostStaticRouting->TraceConnectWithoutContext("Tx", MakeCallback(&ipTxTrace));
+  remoteHostStaticRouting->TraceConnectWithoutContext("Drop", MakeBoundCallback(&IpDropTrace, callbackFile));
+  remoteHostStaticRouting->TraceConnectWithoutContext("Tx", MakeBoundCallback(&ipTxTrace, callbackFile));
   remoteHostStaticRouting->AddNetworkRouteTo (Ipv4Address ("7.0.0.0"), Ipv4Mask ("255.0.0.0"), 1);
 
   NodeContainer ueNodes;
@@ -382,6 +383,9 @@ int main (int argc, char *argv[])
   enbNodes.Create (numNodePairs);
   ueNodes.Create (numNodePairs);
 
+  std::cout<< "Adding Mobility" << std::endl;
+
+  // Set mobility, channel, propagation models
   for(uint32_t i=0; i<ueNodes.GetN(); i++){
     ns3::Time t_uas = createUASMobility(ueNodes.Get(i), scenario, simTime) + MilliSeconds(500);
     if (t_uas > simTime) {simTime = t_uas;}
@@ -389,12 +393,34 @@ int main (int argc, char *argv[])
   for(uint32_t i=0; i<enbNodes.GetN(); i++){
     createBSSMobility(enbNodes.Get(i), Vector(distance*i,0,0));
   }
-
+  
   // Install LTE Devices to the nodes
   NetDeviceContainer enbLteDevs = lteHelper->InstallEnbDevice (enbNodes);
   NetDeviceContainer ueLteDevs = lteHelper->InstallUeDevice (ueNodes);
+  
+
+  //------------------------------------------------------------//
+  //-------------Install LTE-V2V Channel Modelling--------------//
+  //------------------------------------------------------------//
+    std::cout << "LTE Models...Set Fading...";
+  // lteHelper->SetFadingModel("ns3::ThreeGPPV2vUrbanChannelModel");
+  lteHelper->SetFadingModel("ns3::ThreeGppChannelModel");
+  
+  std::cout << ".....Set Path Loss...";
+  ThreeGppV2vUrbanPropagationLossModel v2v = ThreeGppV2vUrbanPropagationLossModel();
+  lteHelper->SetPathlossModelType(v2v.GetTypeId());
+  
+  std::cout <<".....Set Spectrum Channel...";
+  lteHelper->SetSpectrumChannelType("ns3::ThreeGppChannelModel");
+
+  std::cout << ".....Done!" << std::endl;
+
+  
+
+  
 
   // Install the IP stack on the UEs
+  std::cout << "installing UE Nodes" << std::endl;
   internet.Install (ueNodes);
   Ipv4InterfaceContainer ueIpIface;
   ueIpIface = epcHelper->AssignUeIpv4Address (NetDeviceContainer (ueLteDevs));
@@ -408,12 +434,17 @@ int main (int argc, char *argv[])
     }
 
   // Attach one UE per eNodeB
+  std::cout<<"ATTACHING UE";
+  // uint16_t minNodes = std::min(ueLteDevs.GetN(), enbLteDevs.GetN());
+  // for (uint16_t i = 0; i < minNodes; i++)
   for (uint16_t i = 0; i < numNodePairs; i++)
     {
       lteHelper->Attach (ueLteDevs.Get(i), enbLteDevs.Get(i));
       // side effect: the default EPS bearer will be activated
     }
 
+
+  std::cout << "Installing UDP Echo Client/Server" << std::endl;
 
   // Install and start applications on UEs and remote host
   uint16_t dlPort = 1100;
@@ -438,8 +469,6 @@ int main (int argc, char *argv[])
           dlClient.SetAttribute ("PacketSize", UintegerValue (1024));
 
           ApplicationContainer clientApps = dlClient.Install(remoteHost);
-          clientApps.Start (Seconds (2.0));
-          clientApps.Stop (Seconds (10.0));
         }
 
       if (!disableUl)
@@ -458,10 +487,8 @@ int main (int argc, char *argv[])
           ulClient.SetAttribute ("PacketSize", UintegerValue (1024));
 
           ApplicationContainer clientApps = ulClient.Install(ueNodes.Get(u));
-          clientApps.Start (Seconds (2.0));
-          clientApps.Stop (Seconds (10.0));
         }
-
+      // if (!disablePl && numMinNodes > 1)
       if (!disablePl && numNodePairs > 1)
         {
           ++otherPort;
@@ -485,22 +512,21 @@ int main (int argc, char *argv[])
     flowmon->CheckForLostPackets ();
   }
 
-  serverApps.Start (MilliSeconds (500));
-  clientApps.Start (MilliSeconds (500));
-  serverApps.Stop  (simTime);
-  clientApps.Stop  (simTime);
+  serverApps.Start (MilliSeconds (500)); serverApps.Stop  (simTime);
+  clientApps.Start (MilliSeconds (500)); clientApps.Stop  (simTime);
 
   
   //--------------------------------------//
   //----------SIMULATION LOGGING----------//
   //--------------------------------------//
-  AsciiTraceHelper ascii; std::string callbackFile = PREFIX + "uavsim.cb";
+  AsciiTraceHelper ascii;
   if(tracing)
   { 
     //touch logfile
     std::ofstream touchfile; 
     touchfile.open(callbackFile, std::ios_base::openmode::_S_trunc);
     if(!touchfile) {NS_LOG_ERROR("Cannot open " + callbackFile); exit(1);}
+    touchfile << "[" << std::endl;
     touchfile.close();
 
     //enable automated traces    
@@ -554,14 +580,24 @@ int main (int argc, char *argv[])
     // Config::ConnectWithoutContext("dl", MakeCallback(&HandoverEndOkTrace));
     }
 
+  std::cout << "running.....";
   Simulator::Stop (simTime);
   Simulator::Run ();
+  std::cout << "\t Done!" << std::endl;
 
   /*GtkConfigStore config;
   config.ConfigureAttributes();*/
 
   Simulator::Destroy ();
 
-  if(tracing){flowmon->SerializeToXmlFile(PREFIX + "uavsim.flowmon", true, true);}
+  if(tracing){
+    flowmon->SerializeToXmlFile(PREFIX + "uavsim.flowmon", true, true);
+
+    std::ofstream touchfile; std::fstream readfile;
+    touchfile.open(callbackFile, std::ios_base::openmode::_S_app);
+    if(!touchfile) {NS_LOG_ERROR("Cannot open " + callbackFile); exit(1);}
+    touchfile << std::endl << "]";
+    touchfile.close();
+    }
   return 0;
 }
