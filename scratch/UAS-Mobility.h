@@ -6,10 +6,11 @@ static double buildingSizeX = 250 - 3.5 * 2 - 3; // m
 static double buildingSizeY = 433 - 3.5 * 2 - 3; // m
 static double streetWidth = 20; // m
 static double buildingHeight = 10; // m
-static uint32_t numBuildingsX = 2;
-static uint32_t numBuildingsY = 2;
-static double maxAxisX = (buildingSizeX + streetWidth) * numBuildingsX;
-static double maxAxisY = (buildingSizeY + streetWidth) * numBuildingsY;
+static double maxAxisX = 4000;
+static double maxAxisY = 2000;
+static uint32_t numBuildingsX = maxAxisX / (buildingSizeX + streetWidth);
+static uint32_t numBuildingsY = maxAxisY / (buildingSizeY + streetWidth);
+
 
 // 3GPP defines that the maximum speed in urban scenario is 60 km/h
 double vScatt = 60 / 3.6;

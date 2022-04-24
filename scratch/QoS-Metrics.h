@@ -67,6 +67,18 @@ static void toJson(std::ostream *os, std::string outfile)
   of.close();
 }
 
+void
+UASCourseChange(std::string outfile, Ptr<const MobilityModel> mob)
+{
+  std::stringbuf os;
+  std::ostream argpass = std::ostream(&os);
+  Vector pos = mob->GetPosition(); Vector vel = mob->GetVelocity();
+  argpass << "\"Time\", " << "\"" << Simulator::Now() << "\"" << ", \"Event\", \"UAS Course Change\", \"Position x\", " << pos.x
+          << ", \"Position y\", " << pos.y << ", \"Position z\", " << pos.z << ", \"Velocity x\", " << vel.x
+          << ", \"Velocity y\", " << vel.y << ", \"Velocity z\", " << vel.z ;
+  toJson(&argpass, outfile);
+}
+
 void IpDropTrace (std::string outfile, std::string context, const Ipv4Header header, Ptr<const Packet> pckt, Ipv4L3Protocol::DropReason dropReason, Ptr<Ipv4> ip, uint32_t interface)
 {
   std::stringbuf os;
@@ -237,8 +249,8 @@ CellRsrpSinrTrace(std::string outfile, uint16_t cellId, uint16_t rnti, double rs
 {
   std::stringbuf os;
   std::ostream argpass = std::ostream(&os);
-  argpass << "\"Time\", " << "\"" << Simulator::Now() << "\"" << ", \"Event\", \"UE RSRP/SINR Report\", \"CellID\", " << cellId
-          << ", \"RSRP\", " << rsrp << ", \"SINR\", " << sinr;
+  argpass << "\"Time\", " << "\"" << Simulator::Now() << "\"" << ", \"Event\", \"UE RSRP/SINR Report\", \"RNTI\", " << rnti 
+          << ", \"CellID\", " << cellId << ", \"RSRP\", " << rsrp << ", \"SINR\", " << sinr;
   toJson(&argpass, outfile);
 }
 
