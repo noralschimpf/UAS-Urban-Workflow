@@ -1,7 +1,6 @@
 #ifndef UAS_MOBILITY_H
 #define UAS_MOBILITY_H
 
-
 // Environment Layout
 static double buildingSizeX = 250 - 3.5 * 2 - 3; // m
 static double buildingSizeY = 433 - 3.5 * 2 - 3; // m
