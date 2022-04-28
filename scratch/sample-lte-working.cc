@@ -363,6 +363,78 @@ void packetRead()
 }
 
 
+
+void
+PrintGnuplottableBuildingListToFile 
+(std::string dirname, ns3::Ptr<ListPositionAllocator> enbPositionAlloc, ns3::Ptr<ListPositionAllocator> uePositionAlloc)
+{
+
+  //-----Log Building Positions-----//
+  std::ofstream outFile;
+  std::string filename = dirname + "/buildings.txt";
+  outFile.open (filename.c_str (), std::ios_base::out | std::ios_base::trunc);
+  if (!outFile.is_open ())
+    {
+      NS_LOG_ERROR ("Can't open file " << filename);
+      return;
+    }
+  
+  outFile << "building,rectFromX,rectFromY,rectToX,rectToY"<<std::endl;
+
+  uint32_t index = 0;
+  for (BuildingList::Iterator it = BuildingList::Begin (); it != BuildingList::End (); ++it)
+    {
+      ++index;
+      Box box = (*it)->GetBoundaries ();
+        outFile << index << "," << box.xMin  << "," << box.yMin
+              << ","   << box.xMax  << "," << box.yMax
+              << std::endl;
+    }
+  outFile.close();
+
+
+
+  //-----Log enb positions-----//
+  filename = dirname + "/enbs.txt";
+  outFile.open (filename.c_str (), std::ios_base::out | std::ios_base::trunc);
+  if (!outFile.is_open ())
+    {
+      NS_LOG_ERROR ("Can't open file " << filename);
+      return;
+    }
+  
+  outFile << "enb,X,Y,Z"<<std::endl;
+  for (uint32_t i = 0; i< enbPositionAlloc->GetSize(); i++)
+  {
+    {
+    ns3::Vector vec = enbPositionAlloc->GetNext();
+    outFile << i << ',' << vec.x << ',' << vec.y << ',' << vec.z << std::endl;
+    }
+  }
+  outFile.close();
+
+  //-----Log ue starting positions-----//
+  filename = dirname + "/ues.txt";
+  outFile.open (filename.c_str (), std::ios_base::out | std::ios_base::trunc);
+  if (!outFile.is_open ())
+    {
+      NS_LOG_ERROR ("Can't open file " << filename);
+      return;
+    }
+  
+  outFile << "ue,X,Y,Z"<<std::endl;
+  for (uint32_t i = 0; i< uePositionAlloc->GetSize(); i++)
+  {
+    {
+    ns3::Vector vec = enbPositionAlloc->GetNext();
+    outFile << i << ',' << vec.x << ',' << vec.y << ',' << vec.z << std::endl;
+    }
+  }
+  outFile.close();
+}
+
+
+
 int main (int argc, char *argv[])
 {
   uint16_t numNodePairs = 2;
