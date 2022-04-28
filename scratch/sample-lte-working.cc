@@ -365,7 +365,7 @@ void packetRead()
 
 
 void
-PrintGnuplottableBuildingListToFile 
+PrintGnuplottablesToFile 
 (std::string dirname, ns3::Ptr<ListPositionAllocator> enbPositionAlloc, ns3::Ptr<ListPositionAllocator> uePositionAlloc)
 {
 
@@ -570,6 +570,8 @@ int main (int argc, char *argv[])
       }
   }
 
+
+  PrintGnuplottablesToFile ("scratchlogs/uavsim", enbPositionAlloc, enbUePositionAlloc);
 
   std::cout<< "Adding Mobility" << std::endl;
 
