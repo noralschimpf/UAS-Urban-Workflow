@@ -19,6 +19,9 @@
 
 #include "UAS-Mobility.h"
 #include "QoS-Metrics.h"
+#include "ns3/csv-reader.h"
+#include <vector>
+#include <iostream>
 
 using namespace ns3;
 
@@ -297,30 +300,6 @@ void createBSSMobility(ns3::Ptr<ns3::Node> node, ns3::Vector v)
 //   return bssMob;
 }
 
-std::vector<float> v1;//store packet arrival time
-std::vector<float> v2;//store packet schedule time, used to schedule packet send
-std::vector<int> v3;//store packet size
-int csv_size;//csv entry
-void packetRead()
-{
-//Helper method to load csv packet information into vectors
-    float x = 0.0;
-    int x1 = 0;
-    //adjust path string to host computer.
-    CsvReader csv ("path to directory where file is/CSE-UDP1-Large.csv", ',');
-    while (csv.FetchNextRow()) {  
-        csv.GetValue(0, x); //read time value
-        v1.push_back(x);//store in vector V1
-        csv.GetValue(1, x1); //read packet size value
-        v3.push_back(x1);//store in vector V3
-    }
-    csv_size = v1.size();// number of packets in file
-    v2.push_back(v1.at(0));
-    for (int i =1; i < csv_size; i++){
-       v2.push_back(v1.at(i) - v1.at(i-1)); //packet schedule time, store in vector v2
-    }
-}
-
 
 void
 PrintGnuplottableBuildingListToFile 
@@ -391,17 +370,193 @@ PrintGnuplottableBuildingListToFile
   outFile.close();
 }
 
+class MyApp : public Application
+{
+public:
+
+  MyApp ();
+  virtual ~MyApp();
+
+  void Setup (Ptr<Socket> socket, Address address, uint32_t packetSize, uint32_t nPackets, DataRate dataRate);
+  void ChangePacketSize(uint32_t packetSize);
+
+private:
+  virtual void StartApplication (void);
+  virtual void StopApplication (void);
+
+  void LoadCSV (void);//load file
+  void packetRead(void);
+  void ScheduleTx (void);
+  void SendPacket (void);
+  
+
+  Ptr<Socket>           m_socket;
+  Address               m_peer;
+  uint32_t              m_packetSize;
+  uint32_t              m_nPackets;
+  DataRate              m_dataRate;
+  EventId               m_sendEvent;
+  bool                  m_running;
+  uint32_t              m_packetsSent;
+  std::vector<float>    v1;//store packet arrival time
+  std::vector<float>    v2;//store packet schedule time, used to schedule packet send
+  std::vector<int>      v3;//store packet size
+  int                   csv_size;//csv entry
+
+};
+
+MyApp::MyApp ()
+  : m_socket (0),
+    m_peer (),
+    m_packetSize (0),
+    m_nPackets (0),
+    m_dataRate (0),
+    m_sendEvent (),
+    m_running (false),
+    m_packetsSent (0)
+{
+}
+
+MyApp::~MyApp()
+{
+  m_socket = 0;
+}
+
+void
+MyApp::Setup (Ptr<Socket> socket, Address address, uint32_t packetSize, uint32_t nPackets, DataRate dataRate)//appId
+{
+  m_socket = socket;
+  m_peer = address;
+  m_packetSize = packetSize;
+  m_nPackets = nPackets;
+  m_dataRate = dataRate;
+  LoadCSV();//load CSV data from file
+}
+
+void
+MyApp::StartApplication (void)
+{
+  std::cout << "Start Application: " << std::endl;
+  m_running = true;
+  //m_packetsSent = 0;
+  m_packetsSent = 1;//+++ new
+  m_socket->Bind ();
+  m_socket->Connect (m_peer);//initiate connection with remote peer using socket
+  SendPacket ();
+}
+
+
+void
+MyApp::StopApplication (void)
+{
+  //std::cout << "Stop Application: " << std::endl;
+  m_running = false;
+
+  if (m_sendEvent.IsRunning ())
+    {
+      Simulator::Cancel (m_sendEvent);
+    }
+
+  if (m_socket)
+    {
+      m_socket->Close ();
+    }
+}
+//Helper method to change packe size 
+void 
+MyApp::ChangePacketSize(uint32_t packetSize) {
+    m_packetSize = packetSize;
+}
+
+void MyApp::packetRead()
+{
+//Helper method to load csv packet information into vectors
+    float x = 0.0;
+    int x1 = 0;
+    //adjust path string to host computer.
+    // CsvReader csv ("path to directory where file is/CSE-UDP1-Large.csv", ',');
+    CsvReader csv = CsvReader("~/src/ns-allinone-3.35/ns-3.35/build/scratch/CSE-UDP1-Large.csv", ',');
+    while (csv.FetchNextRow()) {  
+        csv.GetValue(0, x); //read time value
+        v1.push_back(x);//store in vector V1
+        csv.GetValue(1, x1); //read packet size value
+        v3.push_back(x1);//store in vector V3
+    }
+    csv_size = v1.size();// number of packets in file
+    v2.push_back(v1.at(0));
+    for (int i =1; i < csv_size; i++){
+       v2.push_back(v1.at(i) - v1.at(i-1)); //packet schedule time, store in vector v2
+    }
+}
+
+
+//Helper method to load csv packet information into vectors 
+void
+MyApp::LoadCSV(){//csv entry
+    float x = 0.0;
+    int x1 = 0;
+    //adjust path string to host computer.
+    // CsvReader csv ("/Users/rafaapaza/ns-allinone-3.35/ns-3.35/scratch/CSVRead/CSE-UDP1-Large.csv", ',');
+
+    // CsvReader csv("\\\\wsl.localhost\\\\Ubuntu-20.04\\\\home\\\\schimpfen\\\\src\\\\ns-allinone-3.35\\\\ns-3.35\\\\scratch\\\\CSE-UDP1-LARGE.csv",',');
+    CsvReader csv("/home/schimpfen/src/ns-allinone-3.35/ns-3.35/scratch/CSE-UDP1-LARGE.csv",',');
+    while (csv.FetchNextRow()) {  
+        csv.GetValue(0, x); //read time value
+        v1.push_back(x);//store in vector V1
+        csv.GetValue(1, x1); //read packet size value
+        v3.push_back(x1);//store in vector V3
+    }
+    csv_size = v1.size();// number of packets in file
+    v2.push_back(v1.at(0));
+    for (int i =1; i < csv_size; i++){
+       v2.push_back(v1.at(i) - v1.at(i-1)); //packet schedule time, store in vector v2
+    }
+}
+
+void
+MyApp::SendPacket (void)
+{
+  SeqTsHeader seqTs;
+  seqTs.SetSeq (m_packetsSent);
+  Ptr<Packet> packet = Create<Packet> (m_packetSize);
+  m_socket->Send (packet);
+
+  if (++m_packetsSent < m_nPackets)
+    {
+      ScheduleTx ();
+    }
+  //std::cout << "SendApp Time: " << Simulator::Now ().GetSeconds () << "\t" << "\t Sent Packet: " << m_packetsSent << "\t Pkt Size: " << m_packetSize << "\t" << "to :" << InetSocketAddress::ConvertFrom(m_peer).GetIpv4 () <<"\n"; 
+}
+
+bool variableBurst;
+bool toggle2 = true;
+int i_var = 0;//packet counter
+
+void
+MyApp::ScheduleTx (void)
+{
+  if (m_running)
+    {
+        if(i_var <= csv_size) { 
+            this ->ChangePacketSize(v3.at(i_var));//packet size update
+            Time tNext (Seconds (v2.at(i_var)));//schedule packet send
+            //std::cout << v2.at(i_var) << " " << i_var << std::endl;//test code
+            m_sendEvent = Simulator::Schedule (tNext, &MyApp::SendPacket, this);
+            i_var++;           
+      }
+    }
+}
 
 int main (int argc, char *argv[])
 {
   uint16_t numNodePairs = 2;
   uint16_t scenario = 0;
   Time simTime = MilliSeconds (1100);
-
+  Time appEndTime = MilliSeconds (1000);
   double distance = 60.0;
   Time interPacketInterval = MilliSeconds (100);
   bool useCa = false;
-  bool disableDl = false;
+  bool disableDl = true;
   bool disableUl = false;
   bool disablePl = false;
   bool tracing = false;
@@ -496,15 +651,7 @@ int main (int argc, char *argv[])
   // lteHelper->SetFadingModel("ns3::ThreeGPPV2vUrbanChannelModel");
   lteHelper->SetFadingModel("ns3::ThreeGppChannelModel");
   
-  std::cout << ".....Set Path Loss...";
-  ThreeGppV2vUrbanPropagationLossModel v2v = ThreeGppV2vUrbanPropagationLossModel();
-  lteHelper->SetPathlossModelType(v2v.GetTypeId());
-  
-  std::cout <<".....Set Spectrum Channel...";
   lteHelper->SetSpectrumChannelType("ns3::ThreeGppChannelModel");
-
-  std::cout << ".....Done!" << std::endl;
-
   
 
   
@@ -564,6 +711,8 @@ int main (int argc, char *argv[])
       if (!disableUl)
         {
           ++ulPort;
+          Address sinkAddress (InetSocketAddress (remoteHostAddr, ulPort));
+
           PacketSinkHelper ulPacketSinkHelper ("ns3::UdpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), ulPort));
           serverApps.Add (ulPacketSinkHelper.Install (remoteHost));
 
@@ -571,13 +720,18 @@ int main (int argc, char *argv[])
           // ulClient.SetAttribute ("Interval", TimeValue (interPacketInterval));
           // ulClient.SetAttribute ("MaxPackets", UintegerValue (1000000));
           // clientApps.Add (ulClient.Install (ueNodes.Get(u)));
-          UdpEchoClientHelper ulClient (remoteHostAddr, ulPort);
-          ulClient.SetAttribute ("MaxPackets", UintegerValue (1000000));
-          ulClient.SetAttribute ("Interval", TimeValue(interPacketInterval));
-          ulClient.SetAttribute ("PacketSize", UintegerValue (1024));
 
-          ApplicationContainer clientApps = ulClient.Install(ueNodes.Get(u));
+          Ptr<Socket> ns3UdpSocket = Socket::CreateSocket (ueNodes.Get (u), UdpSocketFactory::GetTypeId ()); //Server at UE create socket
+          Ptr<MyApp> app2 = CreateObject<MyApp> ();
+          app2->Setup (ns3UdpSocket, sinkAddress, 1400, 2511, DataRate ("1Mbps"));//+++UE socket, peer address, pkt size 1400
+          ueNodes.Get (u)->AddApplication (app2);//+++connect app1 to ue: internetIpIfaces.GetAddress(0)
+
+          app2->SetStartTime (MilliSeconds (0));
+          app2->SetStopTime (appEndTime);
         }
+
+        //   ApplicationContainer clientApps = ulClient.Install(ueNodes.Get(u));
+        // }
       // if (!disablePl && numMinNodes > 1)
       if (!disablePl && numNodePairs > 1)
         {
@@ -602,8 +756,8 @@ int main (int argc, char *argv[])
     flowmon->CheckForLostPackets ();
   }
 
-  serverApps.Start (MilliSeconds (500)); serverApps.Stop  (simTime);
-  clientApps.Start (MilliSeconds (500)); clientApps.Stop  (simTime);
+  serverApps.Start (MilliSeconds (50)); serverApps.Stop  (simTime);
+  clientApps.Start (MilliSeconds (50)); clientApps.Stop  (simTime);
 
   
   //--------------------------------------//
@@ -631,9 +785,9 @@ int main (int argc, char *argv[])
     std::string udpSocketPrefix = "/NodeList/*/$ns3::UdpL4Protocol/SocketList/*/";
     // std::string ipPrefix = "/NodeList/*/$ns3::Ipv4L3Protocol/";
 
-    Config::ConnectWithoutContext(udpClientPrefix + "Rx", MakeBoundCallback(&UdpRxTrace, callbackFile));
-    Config::ConnectWithoutContext(udpClientPrefix + "Tx", MakeBoundCallback(&UdpTxTrace, callbackFile));
-    Config::ConnectWithoutContext(udpSocketPrefix + "Drop", MakeBoundCallback(&udpDropTrace, callbackFile));
+    // Config::ConnectWithoutContext(udpClientPrefix + "Rx", MakeBoundCallback(&UdpRxTrace, callbackFile));
+    // Config::ConnectWithoutContext(udpClientPrefix + "Tx", MakeBoundCallback(&UdpTxTrace, callbackFile));
+    // Config::ConnectWithoutContext(udpSocketPrefix + "Drop", MakeBoundCallback(&udpDropTrace, callbackFile));
     // Config::ConnectWithoutContext(udpServerPrefix + "Rx", MakeCallback(&UdpRxTrace));
     // Config::Connect(ipPrefix + "Drop", MakeCallback(&IpDropTrace));
     // Config::Connect(ipPrefix + "Tx", MakeCallback(&ipTxTrace));

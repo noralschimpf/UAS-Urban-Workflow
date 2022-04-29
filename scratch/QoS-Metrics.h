@@ -96,29 +96,29 @@ void ipTxTrace (std::string outfile, Ptr<const Packet> pkt, Ptr<Ipv4> ip, uint32
   toJson(&argpass, outfile);
 }
 
-static void
-UdpRxTrace (std::string outfile, Ptr<const Packet> pck)
-{
-  std::stringbuf os;
-  std::ostream argpass = std::ostream(&os);
-  argpass << "\"Time\", " << "\"" << Simulator::Now() << "\"" << ", \"Event\", \"UDP RX\", " << ", \"Size\", " << pck->GetSize();
-  toJson(&argpass, outfile);
-}
-static void UdpTxTrace (std::string outfile, Ptr<const Packet> pkt)
-{
-  std::stringbuf os;
-  std::ostream argpass = std::ostream(&os);
-  argpass << "\"Time\", " << "\"" << Simulator::Now() << "\"" << ", \"Event\", \"UDP TX\", \"Size\", " << pkt->GetSize();
-  toJson(&argpass, outfile);
-}
+// static void
+// UdpRxTrace (std::string outfile, Ptr<const Packet> pck)
+// {
+//   std::stringbuf os;
+//   std::ostream argpass = std::ostream(&os);
+//   argpass << "\"Time\", " << "\"" << Simulator::Now() << "\"" << ", \"Event\", \"UDP RX\", " << ", \"Size\", " << pck->GetSize();
+//   toJson(&argpass, outfile);
+// }
+// static void UdpTxTrace (std::string outfile, Ptr<const Packet> pkt)
+// {
+//   std::stringbuf os;
+//   std::ostream argpass = std::ostream(&os);
+//   argpass << "\"Time\", " << "\"" << Simulator::Now() << "\"" << ", \"Event\", \"UDP TX\", \"Size\", " << pkt->GetSize();
+//   toJson(&argpass, outfile);
+// }
 
-static void udpDropTrace (std::string outfile, Ptr<const Packet> pkt)
-{
-  std::stringbuf os;
-  std::ostream argpass = std::ostream(&os);
-  argpass << "\"Time\", " << "\"" << Simulator::Now() << "\"" <<  ", \"Event\", \"UDP DROP\", \"Size\", " << pkt->GetSize();
-  toJson(&argpass, outfile);
-}
+// static void udpDropTrace (std::string outfile, Ptr<const Packet> pkt)
+// {
+//   std::stringbuf os;
+//   std::ostream argpass = std::ostream(&os);
+//   argpass << "\"Time\", " << "\"" << Simulator::Now() << "\"" <<  ", \"Event\", \"UDP DROP\", \"Size\", " << pkt->GetSize();
+//   toJson(&argpass, outfile);
+// }
 
 
 // void RxTrace (std::string context, Ptr<const Packet> pkt, const Address &a, const Address &b)

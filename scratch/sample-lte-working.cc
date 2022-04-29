@@ -24,6 +24,9 @@
 
 #include "UAS-Mobility.h"
 #include "QoS-Metrics.h"
+#include "ns3/csv-reader.h"
+#include <vector>
+#include <iostream>
 
 using namespace ns3;
 
@@ -434,25 +437,203 @@ PrintGnuplottablesToFile
 }
 
 
+class MyApp : public Application
+{
+public:
+
+  MyApp ();
+  virtual ~MyApp();
+
+  void Setup (Ptr<Socket> socket, Address address, uint32_t packetSize, uint32_t nPackets, DataRate dataRate);
+  void ChangePacketSize(uint32_t packetSize);
+
+private:
+  virtual void StartApplication (void);
+  virtual void StopApplication (void);
+
+  void LoadCSV (void);//load file
+  void packetRead(void);
+  void ScheduleTx (void);
+  void SendPacket (void);
+  
+
+  Ptr<Socket>           m_socket;
+  Address               m_peer;
+  uint32_t              m_packetSize;
+  uint32_t              m_nPackets;
+  DataRate              m_dataRate;
+  EventId               m_sendEvent;
+  bool                  m_running;
+  uint32_t              m_packetsSent;
+  std::vector<float>    v1;//store packet arrival time
+  std::vector<float>    v2;//store packet schedule time, used to schedule packet send
+  std::vector<int>      v3;//store packet size
+  int                   csv_size;//csv entry
+
+};
+
+MyApp::MyApp ()
+  : m_socket (0),
+    m_peer (),
+    m_packetSize (0),
+    m_nPackets (0),
+    m_dataRate (0),
+    m_sendEvent (),
+    m_running (false),
+    m_packetsSent (0)
+{
+}
+
+MyApp::~MyApp()
+{
+  m_socket = 0;
+}
+
+void
+MyApp::Setup (Ptr<Socket> socket, Address address, uint32_t packetSize, uint32_t nPackets, DataRate dataRate)//appId
+{
+  m_socket = socket;
+  m_peer = address;
+  m_packetSize = packetSize;
+  m_nPackets = nPackets;
+  m_dataRate = dataRate;
+  LoadCSV();//load CSV data from file
+}
+
+void
+MyApp::StartApplication (void)
+{
+  std::cout << "Start Application: " << std::endl;
+  m_running = true;
+  //m_packetsSent = 0;
+  m_packetsSent = 1;//+++ new
+  m_socket->Bind ();
+  m_socket->Connect (m_peer);//initiate connection with remote peer using socket
+  SendPacket ();
+}
+
+
+void
+MyApp::StopApplication (void)
+{
+  //std::cout << "Stop Application: " << std::endl;
+  m_running = false;
+
+  if (m_sendEvent.IsRunning ())
+    {
+      Simulator::Cancel (m_sendEvent);
+    }
+
+  if (m_socket)
+    {
+      m_socket->Close ();
+    }
+}
+//Helper method to change packe size 
+void 
+MyApp::ChangePacketSize(uint32_t packetSize) {
+    m_packetSize = packetSize;
+}
+
+void MyApp::packetRead()
+{
+//Helper method to load csv packet information into vectors
+    float x = 0.0;
+    int x1 = 0;
+    //adjust path string to host computer.
+    // CsvReader csv ("path to directory where file is/CSE-UDP1-Large.csv", ',');
+    CsvReader csv = CsvReader("~/src/ns-allinone-3.35/ns-3.35/build/scratch/CSE-UDP1-Large.csv", ',');
+    while (csv.FetchNextRow()) {  
+        csv.GetValue(0, x); //read time value
+        v1.push_back(x);//store in vector V1
+        csv.GetValue(1, x1); //read packet size value
+        v3.push_back(x1);//store in vector V3
+    }
+    csv_size = v1.size();// number of packets in file
+    v2.push_back(v1.at(0));
+    for (int i =1; i < csv_size; i++){
+       v2.push_back(v1.at(i) - v1.at(i-1)); //packet schedule time, store in vector v2
+    }
+}
+
+
+//Helper method to load csv packet information into vectors 
+void
+MyApp::LoadCSV(){//csv entry
+    float x = 0.0;
+    int x1 = 0;
+    //adjust path string to host computer.
+    // CsvReader csv ("/Users/rafaapaza/ns-allinone-3.35/ns-3.35/scratch/CSVRead/CSE-UDP1-Large.csv", ',');
+
+    // CsvReader csv("\\\\wsl.localhost\\\\Ubuntu-20.04\\\\home\\\\schimpfen\\\\src\\\\ns-allinone-3.35\\\\ns-3.35\\\\scratch\\\\CSE-UDP1-LARGE.csv",',');
+    CsvReader csv("/home/schimpfen/src/ns-allinone-3.35/ns-3.35/scratch/CSE-UDP1-LARGE.csv",',');
+    while (csv.FetchNextRow()) {  
+        csv.GetValue(0, x); //read time value
+        v1.push_back(x);//store in vector V1
+        csv.GetValue(1, x1); //read packet size value
+        v3.push_back(x1);//store in vector V3
+    }
+    csv_size = v1.size();// number of packets in file
+    v2.push_back(v1.at(0));
+    for (int i =1; i < csv_size; i++){
+       v2.push_back(v1.at(i) - v1.at(i-1)); //packet schedule time, store in vector v2
+    }
+}
+
+void
+MyApp::SendPacket (void)
+{
+  SeqTsHeader seqTs;
+  seqTs.SetSeq (m_packetsSent);
+  Ptr<Packet> packet = Create<Packet> (m_packetSize);
+  m_socket->Send (packet);
+
+  if (++m_packetsSent < m_nPackets)
+    {
+      ScheduleTx ();
+    }
+  //std::cout << "SendApp Time: " << Simulator::Now ().GetSeconds () << "\t" << "\t Sent Packet: " << m_packetsSent << "\t Pkt Size: " << m_packetSize << "\t" << "to :" << InetSocketAddress::ConvertFrom(m_peer).GetIpv4 () <<"\n"; 
+}
+
+bool variableBurst;
+bool toggle2 = true;
+int i_var = 0;//packet counter
+
+void
+MyApp::ScheduleTx (void)
+{
+  if (m_running)
+    {
+        if(i_var <= csv_size) { 
+            this ->ChangePacketSize(v3.at(i_var));//packet size update
+            Time tNext (Seconds (v2.at(i_var)));//schedule packet send
+            //std::cout << v2.at(i_var) << " " << i_var << std::endl;//test code
+            m_sendEvent = Simulator::Schedule (tNext, &MyApp::SendPacket, this);
+            i_var++;           
+      }
+    }
+}
 
 int main (int argc, char *argv[])
 {
   uint16_t numNodePairs = 2;
   uint16_t scenario = 0;
   Time simTime = MilliSeconds (1100);
-
+  Time appEndTime = MilliSeconds (1000);
   double distance = 60.0;
   Time interPacketInterval = MilliSeconds (100);
   bool useCa = false;
-  bool disableDl = false;
+  bool disableDl = true;
   bool disableUl = false;
   bool disablePl = false;
   bool tracing = false;
+  bool sectorized = false;
   std::string handoverMetric = "RSRQ";
 
   scenario = 3;
   // simTime = MilliSeconds (0);
   tracing = true;
+  
 
   // Command line arguments
   CommandLine cmd (__FILE__);
@@ -467,6 +648,7 @@ int main (int argc, char *argv[])
   cmd.AddValue("tracing", "Enable Packet Capture", tracing);
   cmd.AddValue("scenario", "UAS Flight Path", scenario);
   cmd.AddValue("handover", "Algorithm for Handover", handoverMetric);
+  cmd.AddValue("sectorized", "Split Cells into 3 cell-sectors", sectorized);
   cmd.Parse (argc, argv);
 
   ConfigStore inputConfig;
@@ -476,15 +658,6 @@ int main (int argc, char *argv[])
   // parse again so you can override default values from the command line
   cmd.Parse(argc, argv);
 
-  if (useCa)
-   {
-     Config::SetDefault ("ns3::LteHelper::UseCa", BooleanValue (useCa));
-     Config::SetDefault ("ns3::LteHelper::NumberOfComponentCarriers", UintegerValue (2));
-     Config::SetDefault ("ns3::LteHelper::EnbComponentCarrierManager", StringValue ("ns3::RrComponentCarrierManager"));
-   }
-  
-  Ptr<LteHelper> lteHelper = CreateObject<LteHelper> ();
-
   std::string algo;
   for(std::size_t i = 0; i < handoverMetric.length(); i++){
     handoverMetric[i] = std::tolower(handoverMetric[i]);
@@ -493,9 +666,19 @@ int main (int argc, char *argv[])
   else if (handoverMetric == "rsrq"){algo = "ns3::A2A4RsrqHandoverAlgorithm";}
   else if (handoverMetric == "none") {algo = "ns3::NoOpHandoverAlgorithm";}
   else{NS_LOG_ERROR("INVALID HANDOVER METRIC");}
-  std::cout << "handover algo: " << algo << std::endl;
-  lteHelper->SetHandoverAlgorithmType(algo);
+
+  if (useCa)
+   {
+     Config::SetDefault ("ns3::LteHelper::UseCa", BooleanValue (useCa));
+     Config::SetDefault ("ns3::LteHelper::NumberOfComponentCarriers", UintegerValue (2));
+     Config::SetDefault ("ns3::LteHelper::EnbComponentCarrierManager", StringValue ("ns3::RrComponentCarrierManager"));
+   }
   
+  Config::SetDefault("ns3::LteEnbPhy::TxPower", DoubleValue(43.0));
+
+
+  
+  Ptr<LteHelper> lteHelper = CreateObject<LteHelper> ();
   Ptr<PointToPointEpcHelper> epcHelper = CreateObject<PointToPointEpcHelper> ();
   lteHelper->SetEpcHelper (epcHelper);
 
@@ -592,66 +775,79 @@ int main (int argc, char *argv[])
   // BuildingsHelper::Install (enbUeNodes);
   // std::cout << ".....DONE" << std::endl;
 
+  std::cout << "HANDOVER ALGORITH: " << algo << std::endl;
+  lteHelper->SetHandoverAlgorithmType(algo);
+
+  //------------------------------------------------------------//
+  //-------------Install LTE-V2V Channel Modelling--------------//
+  //------------------------------------------------------------//
+  std::cout << "LTE Models...Set Fading...";
+  // lteHelper->SetFadingModel("ns3::ThreeGPPV2vUrbanChannelModel");
+  // lteHelper->SetFadingModel("ns3::ThreeGppChannelModel");
+  std::cout <<".....Set Spectrum Channel...";
+  // lteHelper->SetSpectrumChannelType("ns3::ThreeGppChannelModel");
+  std::cout << "Set Path Loss...";
+  lteHelper->SetAttribute ("PathlossModel", StringValue ("ns3::FriisPropagationLossModel"));
+  // lteHelper->SetAttribute ("PathlossModel", StringValue ("ns3::ThreeGppV2vUrbanPropagationLossModel"));
+  // ThreeGppV2vUrbanPropagationLossModel v2v = ThreeGppV2vUrbanPropagationLossModel();
+  // lteHelper->SetPathlossModelType(v2v.GetTypeId());
 
 
   // Install EnB / UE Devices, include EnB Antenna Sectorization
   // Install LTE Devices to the nodes
-  std::cout << "HANDOVER ALGORITHM" <<std::endl;
   
-  std::cout << "NETDEVICE INSTALLS: ENB....";
-  // NetDeviceContainer enbDevs = lteHelper->InstallEnbDevice(enbNodes);
+  std::cout << "NETDEVICE INSTALLS: ";
+
+  std::cout << "EnB.....";
+  NetDeviceContainer enbDevs;
+  if (sectorized){
+    for(int i = 0; i < 18; i += 3)
+    {
+      std::cout << std::endl << "Sectorizing nodes " << i << " - " << i+2 << "\t";
+      lteHelper->SetEnbAntennaModelType ("ns3::CosineAntennaModel");
+      lteHelper->SetEnbAntennaModelAttribute ("Orientation", DoubleValue (0));
+      lteHelper->SetEnbAntennaModelAttribute ("HorizontalBeamwidth", DoubleValue (120));
+      lteHelper->SetEnbAntennaModelAttribute ("MaxGain", DoubleValue (0.0));
+      std::cout << "Install antenna " << i << "...";
+      enbDevs.Add ( lteHelper->InstallEnbDevice (enbNodes.Get (i)));
+
+
+      lteHelper->SetEnbAntennaModelType ("ns3::CosineAntennaModel");
+      lteHelper->SetEnbAntennaModelAttribute ("Orientation", DoubleValue (360/3));
+      lteHelper->SetEnbAntennaModelAttribute ("HorizontalBeamwidth", DoubleValue (120));
+      lteHelper->SetEnbAntennaModelAttribute ("MaxGain", DoubleValue (0.0));
+      std::cout << "....." << i+1 << "...";
+      enbDevs.Add ( lteHelper->InstallEnbDevice (enbNodes.Get (i + 1)));
+
+
+      lteHelper->SetEnbAntennaModelType ("ns3::CosineAntennaModel");
+      lteHelper->SetEnbAntennaModelAttribute ("Orientation", DoubleValue (2*360/3));
+      lteHelper->SetEnbAntennaModelAttribute ("HorizontalBeamwidth", DoubleValue (120));
+      lteHelper->SetEnbAntennaModelAttribute ("MaxGain", DoubleValue (0.0));
+      std::cout << "....." << i+2 << "...";
+      enbDevs.Add ( lteHelper->InstallEnbDevice (enbNodes.Get (i + 2)));  
+      std::cout << std::endl;
+    }
+  }
+  else {
+    std::cout << std::endl << "Setting LTE Cells without sectorization" << std::endl;
+    // NetDeviceContainer enbDevs = lteHelper->InstallEnbDevice(enbNodes);
+    enbDevs.Add(lteHelper->InstallEnbDevice(enbNodes));
+  }
+
+
   std::cout << "ENB UE.....";
   NetDeviceContainer enbUeDevs = lteHelper->InstallUeDevice(enbUeNodes);
   std::cout << "UAS UE.....";
   NetDeviceContainer ueDevs = lteHelper->InstallUeDevice (ueNodes);
-  std::cout << "DONE" << std::endl;
-
-    //------------------------------------------------------------//
-  //-------------Install LTE-V2V Channel Modelling--------------//
-  //------------------------------------------------------------//
-  Config::SetDefault("ns3::LteEnbPhy::TxPower", DoubleValue(43.0));
-
-  std::cout << "LTE Models...Set Fading...";
-  // lteHelper->SetFadingModel("ns3::ThreeGPPV2vUrbanChannelModel");
-  lteHelper->SetFadingModel("ns3::ThreeGppChannelModel");
-  std::cout <<".....Set Spectrum Channel...";
-  lteHelper->SetSpectrumChannelType("ns3::ThreeGppChannelModel");
-  std::cout << "Set Path Loss...";
-  ThreeGppV2vUrbanPropagationLossModel v2v = ThreeGppV2vUrbanPropagationLossModel();
-  lteHelper->SetPathlossModelType(v2v.GetTypeId());
+  
 
   // for(int i = 0; i < 18; i++)
   // {
   //   envDevs
   // }
-  NetDeviceContainer enbDevs;
-  for(int i = 0; i < 18; i += 3)
-  {
-    std::cout << std::endl << "Sectorizing nodes " << i << " - " << i+2 << "\t";
-    lteHelper->SetEnbAntennaModelType ("ns3::CosineAntennaModel");
-    lteHelper->SetEnbAntennaModelAttribute ("Orientation", DoubleValue (0));
-    lteHelper->SetEnbAntennaModelAttribute ("HorizontalBeamwidth", DoubleValue (120));
-    lteHelper->SetEnbAntennaModelAttribute ("MaxGain", DoubleValue (0.0));
-    std::cout << "Install antenna " << i << "...";
-    enbDevs.Add ( lteHelper->InstallEnbDevice (enbNodes.Get (i)));
-
-
-    lteHelper->SetEnbAntennaModelType ("ns3::CosineAntennaModel");
-    lteHelper->SetEnbAntennaModelAttribute ("Orientation", DoubleValue (360/3));
-    lteHelper->SetEnbAntennaModelAttribute ("HorizontalBeamwidth", DoubleValue (120));
-    lteHelper->SetEnbAntennaModelAttribute ("MaxGain", DoubleValue (0.0));
-    std::cout << "....." << i+1 << "...";
-    enbDevs.Add ( lteHelper->InstallEnbDevice (enbNodes.Get (i + 1)));
-
-
-    lteHelper->SetEnbAntennaModelType ("ns3::CosineAntennaModel");
-    lteHelper->SetEnbAntennaModelAttribute ("Orientation", DoubleValue (2*360/3));
-    lteHelper->SetEnbAntennaModelAttribute ("HorizontalBeamwidth", DoubleValue (120));
-    lteHelper->SetEnbAntennaModelAttribute ("MaxGain", DoubleValue (0.0));
-    std::cout << "....." << i+2 << "...";
-    enbDevs.Add ( lteHelper->InstallEnbDevice (enbNodes.Get (i + 2)));  
-    std::cout << std::endl;
-  }
+  
+  std::cout << "DONE" << std::endl;
   
 
 
@@ -665,18 +861,18 @@ int main (int argc, char *argv[])
   ueIpIface = epcHelper->AssignUeIpv4Address (NetDeviceContainer (ueDevs));
   enbUeIpIface = epcHelper->AssignUeIpv4Address (NetDeviceContainer (enbUeDevs));
   // Assign IP address to UEs, and install applications
-  std::cout << "UE DEVICES: ";
-  for (uint32_t i = 0; i < 18; i++)
-  {
-    Ptr<NetDevice> dev = enbUeDevs.Get(i);
-    std::cout << i <<"...";
-  } std::cout <<".....Done!" << std::endl;
-  std::cout << "ENB DEVICES: ";
-  for (uint32_t i = 0; i < 18; i++)
-  {
-    Ptr<NetDevice> dev = enbDevs.Get(i);
-    std::cout << i <<"...";
-  } std::cout <<".....Done!" << std::endl;
+  // std::cout << "UE DEVICES: ";
+  // for (uint32_t i = 0; i < 18; i++)
+  // {
+  //   Ptr<NetDevice> dev = enbUeDevs.Get(i);
+  //   std::cout << i <<"...";
+  // } std::cout <<".....Done!" << std::endl;
+  // std::cout << "ENB DEVICES: ";
+  // for (uint32_t i = 0; i < 18; i++)
+  // {
+  //   Ptr<NetDevice> dev = enbDevs.Get(i);
+  //   std::cout << i <<"...";
+  // } std::cout <<".....Done!" << std::endl;
 
   std::cout << "UE IPV4 ROUTING: ";
   for (uint32_t i = 0; i < 18; i++)
@@ -686,13 +882,14 @@ int main (int argc, char *argv[])
       std::cout << i << "...";
       Ptr<Ipv4StaticRouting> ueStaticRouting = ipv4RoutingHelper.GetStaticRouting (enbUeNodes.Get (i)->GetObject<Ipv4> ());
       ueStaticRouting->SetDefaultRoute (epcHelper->GetUeDefaultGatewayAddress (), 1);
-    } std::cout << ".....Done!" << std::endl << "ATTACH LOADING UEs: ";
+    } std::cout << ".....Done!" << std::endl;
+    std::cout << "ATTACH LOADING UEs: ";
 for (uint32_t i = 0; i < 18; i++){
       //Attach each EnB-Loading UE to associated EnB
       Ptr<NetDevice> dev1, dev2;
-      dev1 = enbUeDevs.Get(i); dev2 = enbDevs.Get(i);
-      std::cout << i << "...";
+      // dev1 = enbUeDevs.Get(i); dev2 = enbDevs.Get(i);
       lteHelper->Attach (enbUeDevs.Get(i), enbDevs.Get(i));
+      std::cout << i << "...";
     } std::cout << ".....Done!" << std::endl;
 
   // Attach one UE per eNodeB
@@ -740,6 +937,7 @@ for (uint32_t i = 0; i < 18; i++){
   ulClient.SetAttribute ("PacketSize", UintegerValue (1024));
 
   clientApps = ulClient.Install(enbUeNodes.Get(0));
+  
 
 
   // Set LTE Loading UDP Sockets
@@ -764,19 +962,26 @@ for (uint32_t i = 0; i < 18; i++){
       if (!disableUl)
         {
           ++ulPort;
+          Address sinkAddress (InetSocketAddress (remoteHostAddr, ulPort));
+
           PacketSinkHelper ulPacketSinkHelper ("ns3::UdpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), ulPort));
           serverApps.Add (ulPacketSinkHelper.Install (remoteHost));
 
-          // UdpClientHelper ulClient (remoteHostAddr, ulPort);
-          // ulClient.SetAttribute ("Interval", TimeValue (interPacketInterval));
+          // UdpEchoClientHelper ulClient (remoteHostAddr, ulPort);
+          // ulClient.SetAttribute ("Interval", TimeValue(interPacketInterval));
           // ulClient.SetAttribute ("MaxPackets", UintegerValue (1000000));
-          // clientApps.Add (ulClient.Install (ueNodes.Get(u)));
-          UdpEchoClientHelper ulClient (remoteHostAddr, ulPort);
-          ulClient.SetAttribute ("MaxPackets", UintegerValue (1000000));
-          ulClient.SetAttribute ("Interval", TimeValue(interPacketInterval));
-          ulClient.SetAttribute ("PacketSize", UintegerValue (1024));
+          // ulClient.SetAttribute ("PacketSize", UintegerValue (1024));
+
+          Ptr<Socket> ns3UdpSocket = Socket::CreateSocket (enbUeNodes.Get (u), UdpSocketFactory::GetTypeId ()); //Server at UE create socket
+          Ptr<MyApp> app2 = CreateObject<MyApp> ();
+          app2->Setup (ns3UdpSocket, sinkAddress, 1400, 2511, DataRate ("1Mbps"));//+++UE socket, peer address, pkt size 1400
+          enbUeNodes.Get (u)->AddApplication (app2);//+++connect app1 to ue: internetIpIfaces.GetAddress(0)
+
+          app2->SetStartTime (MilliSeconds (0));
+          app2->SetStopTime (appEndTime);
 
           clientApps = ulClient.Install(enbUeNodes.Get(u));
+          
         // }
       // if (!disablePl && numMinNodes > 1)
       // if (!disablePl)
@@ -794,18 +999,20 @@ for (uint32_t i = 0; i < 18; i++){
     }
 
 
+  serverApps.Start (MilliSeconds (50)); serverApps.Stop  (simTime);
+  clientApps.Start (MilliSeconds (50)); clientApps.Stop  (simTime);
+
 
   /**************** FLOW MONITOR can track packet statistics at Layer 3 ********************/
     /**************** FLOW MONITOR SETUP ********************/
   Ptr<FlowMonitor> flowmon;
   FlowMonitorHelper flowmonHelper;
-  if(tracing){
+  
+  if (tracing) {
     flowmon = flowmonHelper.InstallAll();
     flowmon->CheckForLostPackets ();
   }
-
-  serverApps.Start (MilliSeconds (500)); serverApps.Stop  (simTime);
-  clientApps.Start (MilliSeconds (500)); clientApps.Stop  (simTime);
+  
 
   
   //--------------------------------------//
@@ -833,9 +1040,9 @@ for (uint32_t i = 0; i < 18; i++){
     std::string udpSocketPrefix = "/NodeList/*/$ns3::UdpL4Protocol/SocketList/*/";
     // std::string ipPrefix = "/NodeList/*/$ns3::Ipv4L3Protocol/";
 
-    Config::ConnectWithoutContext(udpClientPrefix + "Rx", MakeBoundCallback(&UdpRxTrace, callbackFile));
-    Config::ConnectWithoutContext(udpClientPrefix + "Tx", MakeBoundCallback(&UdpTxTrace, callbackFile));
-    Config::ConnectWithoutContext(udpSocketPrefix + "Drop", MakeBoundCallback(&udpDropTrace, callbackFile));
+    // Config::ConnectWithoutContext(udpClientPrefix + "Rx", MakeBoundCallback(&UdpRxTrace, callbackFile));
+    // Config::ConnectWithoutContext(udpClientPrefix + "Tx", MakeBoundCallback(&UdpTxTrace, callbackFile));
+    // Config::ConnectWithoutContext(udpSocketPrefix + "Drop", MakeBoundCallback(&udpDropTrace, callbackFile));
     // Config::ConnectWithoutContext(udpServerPrefix + "Rx", MakeCallback(&UdpRxTrace));
     // Config::Connect(ipPrefix + "Drop", MakeCallback(&IpDropTrace));
     // Config::Connect(ipPrefix + "Tx", MakeCallback(&ipTxTrace));
