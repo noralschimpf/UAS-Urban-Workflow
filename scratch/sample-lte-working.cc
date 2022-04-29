@@ -757,8 +757,6 @@ int main (int argc, char *argv[])
   PrintGnuplottablesToFile ("scratchlogs/uavsim", enbPositionAlloc, enbUePositionAlloc);
 
   std::cout<< "Adding Mobility" << std::endl;
-
-  // Set UAS mobility models
   for(uint32_t i=0; i<ueNodes.GetN(); i++){
     ns3::Time t_uas = createUASMobility(ueNodes.Get(i), scenario, simTime) + MilliSeconds(500);
     if (t_uas > simTime) {simTime = t_uas;}
@@ -781,16 +779,21 @@ int main (int argc, char *argv[])
   //------------------------------------------------------------//
   //-------------Install LTE-V2V Channel Modelling--------------//
   //------------------------------------------------------------//
-  std::cout << "LTE Models...Set Fading...";
-  // lteHelper->SetFadingModel("ns3::ThreeGPPV2vUrbanChannelModel");
-  // lteHelper->SetFadingModel("ns3::ThreeGppChannelModel");
-  std::cout <<".....Set Spectrum Channel...";
-  // lteHelper->SetSpectrumChannelType("ns3::ThreeGppChannelModel");
-  std::cout << "Set Path Loss...";
-  lteHelper->SetAttribute ("PathlossModel", StringValue ("ns3::FriisPropagationLossModel"));
-  // lteHelper->SetAttribute ("PathlossModel", StringValue ("ns3::ThreeGppV2vUrbanPropagationLossModel"));
+  std::cout << "LTE Models: ";
+  std::cout << "Set Path Loss.....";
+  lteHelper->SetAttribute ("PathlossModel", StringValue ("ns3::ThreeGppV2vUrbanPropagationLossModel"));
+  lteHelper->SetPathlossModelAttribute("ChannelConditionModel", StringValue("ns3::ThreeGppUmaChannelConditionModel"));
   // ThreeGppV2vUrbanPropagationLossModel v2v = ThreeGppV2vUrbanPropagationLossModel();
   // lteHelper->SetPathlossModelType(v2v.GetTypeId());
+  std::cout <<"Set Spectrum Channel.....";
+  // lteHelper->SetSpectrumChannelType("ns3::ThreeGppChannelModel");
+  // lteHelper->SetSpectrumChannelAttribute("ChannelConditionModel", StringValue("ns3::ThreeGppUmaChannelConditionModel"));
+  // lteHelper->SetSpectrumChannelAttribute("UpdatePeriod", TimeValue(MilliSeconds(1.)) );
+  std::cout << "Set Fading.....";
+  // lteHelper->SetFadingModel("ns3::ThreeGppChannelModel");
+  // lteHelper->SetFadingModelAttribute("Scenario", StringValue("UMa"));
+  // lteHelper->SetFadingModelAttribute("ChannelConditionModel", StringValue("ns3::ThreeGppUmaChannelConditionModel"));
+  // lteHelper->SetFadingModelAttribute("UpdatePeriod", TimeValue(MilliSeconds(1.)) );
 
 
   // Install EnB / UE Devices, include EnB Antenna Sectorization
