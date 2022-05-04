@@ -12,6 +12,10 @@ NS_LOG_COMPONENT_DEFINE ("FinalProject");
 static std::string PREFIX = "scratchlogs/uavsim/";
 static std::string callbackFile = PREFIX + "uavsimCallbacks.json";
 static long recv_counter = 0;
+const std::string FILLERSTRING = "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Commodo ullamcorper a lacus vestibulum sed arcu non odio euismod. Pellentesque sit amet porttitor eget dolor. Libero nunc consequat interdum varius sit amet mattis. Nibh cras pulvinar mattis nunc sed. Vulputate sapien nec sagittis aliquam malesuada bibendum arcu. Felis donec et odio pellentesque diam volutpat commodo sed. Porttitor eget dolor morbi non arcu. Viverra nam libero justo laoreet sit amet cursus sit amet. Praesent semper feugiat nibh sed. Suspendisse potenti nullam ac tortor vitae purus faucibus. Dui sapien eget mi proin sed libero enim sed faucibus. Donec et odio pellentesque diam volutpat commodo sed. Nam libero justo laoreet sit. In hac habitasse platea dictumst quisque sagittis purus sit. Donec et odio pellentesque diam. Ipsum dolor sit amet consectetur adipiscing elit duis tristique. Gravida neque convallis a cras semper auctor neque. Turpis massa sed elementum tempus egestas sed. Eleifend donec pretium vulputate sapien nec sagittis. Egestas dui id ornare arcu odio ut sem nulla. Nunc non blandit massa enim nec dui nunc mattis. Mauris a diam maecenas sed enim ut. Donec adipiscing tristique risus nec feugiat in fermentum. At risus viverra adipiscing at in. Amet purus gravida quis blandit turpis cursus in. Pharetra sit amet aliquam id diam maecenas ultricies mi. Enim praesent elementum facilisis leo vel fringilla est ullamcorper eget. Nec nam aliquam sem et. Nibh cras pulvinar mattis nunc sed blandit libero. Semper feugiat nibh sed pulvinar proin gravida hendrerit lectus a. Vulputate sapien nec sagittis aliquam malesuada. Sit amet cursus sit amet dictum sit amet justo donec.";
+const char *buffer;
+// const uint128_t bufSize = static_cast<const uint128_t>(FILLERSTRING.length());
+// uint8_t *pckBuff[bufSize];
 // // See link for available trace sources, callback selection 
 // // https://www.nsnam.org/docs/release/3.35/doxygen/_trace_source_list.html
 
@@ -283,6 +287,26 @@ RxEndErrorTrace(std::string outfile, ns3::Ptr<const Packet> pckt)
 }
 
 
+
+double PSNR (uint8_t *txBuffer, uint8_t *rxBuffer, uint32_t buffLen)
+//    PSNR: 10*log10(max pixel value / (MSE argpass actual v. received image))
+{
+  std::vector<uint8_t> txVec(txBuffer[0], txBuffer[buffLen]);
+  std::vector<uint8_t> rxVec(rxBuffer[0], rxBuffer[buffLen]);
+  uint8_t maxVal = 0;
+  for (uint32_t i = 0; i < buffLen; i++){
+    if (rxBuffer[i] >= maxVal) {maxVal = rxBuffer[i];}
+  }
+  // std::vector<double> errSqr(rxVec.Size());
+  double MSE = 0.;
+  for (uint32_t i = 0; i < buffLen; i++){
+    MSE += std::pow(((long double)txVec[i] - (long double)rxVec[i]),2);
+  }
+  MSE /= buffLen;
+  double PSNR = 10*std::log10(maxVal / MSE);
+  return PSNR;
+}
+
 void RcvPacket(std::string outfile, Ptr<const Packet> p, const Address &addr){
   std::stringbuf os;
   std::ostream argpass = std::ostream(&os);
@@ -296,10 +320,26 @@ void RcvPacket(std::string outfile, Ptr<const Packet> p, const Address &addr){
   }else{
           strcpy(application, "\"eNB Loading\"");
   }
+  Ipv4Address srcaddr = InetSocketAddress::ConvertFrom(addr).GetIpv4();
   
+  
+  uint8_t *rxBuffer = new uint8_t[p->GetSize()];
+  uint8_t *txBuffer = new uint8_t[p->GetSize()];
+  for (uint32_t i = 0; i < p->GetSize(); i++){
+    txBuffer[i] = (uint8_t)FILLERSTRING[i];
+  }
+  // txBuffer = (uint8_t *)FILLERSTRING.substr(0,p->GetSize()).c_str();
+  uint32_t size = p-> CopyData(rxBuffer, p->GetSize());
+  double psnr = 0.0;
+  if (srcaddr == Ipv4Address("7.0.0.2")){
+    psnr = PSNR(txBuffer, rxBuffer, p->GetSize());
+    
+  }
+  std::cout << "PACKET RECEIVED\tSRC: " << srcaddr << "\tSIZE " << size << "\tPSNR " << psnr << std::endl;
+
   argpass << "\"Time\", " << "\"" << Simulator::Now() << "\"" << ", \"Event\", \"APP Packet Received\", " 
           << "\"Application\", " << application << ", \"Sequence\", " << currentSequenceNumber << ", \"Size\", " << p->GetSize() 
-          << ", \"Source addr\", \"" << InetSocketAddress::ConvertFrom(addr).GetIpv4() 
-          << "\", \"Source Port\", " << InetSocketAddress::ConvertFrom(addr).GetPort();
+          << ", \"Source addr\", \"" << srcaddr << "\", \"Source Port\", " << InetSocketAddress::ConvertFrom(addr).GetPort()
+          << "PSNR: " << psnr;
   toJson(&argpass, outfile);
 }
