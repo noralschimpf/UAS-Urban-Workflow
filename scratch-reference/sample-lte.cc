@@ -1,4 +1,4 @@
-
+#include "ns3/buildings-module.h"
 #include "ns3/core-module.h"
 #include "ns3/point-to-point-module.h"
 #include "ns3/internet-module.h"
@@ -6,10 +6,22 @@
 #include "ns3/mobility-module.h"
 #include "ns3/config-store-module.h"
 #include "ns3/lte-module.h"
+// #include "math.h"
 //#include "ns3/gtk-config-store.h"
 
 #include "ns3/network-module.h"
 #include "ns3/ipv4-global-routing-helper.h"
+#include "ns3/flow-monitor-module.h"
+#include "ns3/three-gpp-spectrum-propagation-loss-model.h"
+#include "ns3/three-gpp-v2v-propagation-loss-model.h"
+#include "ns3/three-gpp-channel-model.h"
+#include "ns3/spectrum-helper.h"
+
+#include "UAS-Mobility.h"
+#include "QoS-Metrics.h"
+#include "ns3/csv-reader.h"
+#include <vector>
+#include <iostream>
 
 using namespace ns3;
 
@@ -19,20 +31,539 @@ using namespace ns3;
  * It also starts another flow between each UE pair.
  */
 
-NS_LOG_COMPONENT_DEFINE ("Sample_LTE");
+// NS_LOG_COMPONENT_DEFINE ("FinalProject");
+
+ns3::Time constAccelDuration(ns3::Vector3D start, ns3::Vector3D end)
+{
+  //start and end in m, vScatt in m/s
+  
+  double dist; double dur;
+  dist = sqrt(pow(end.x - start.x, 2) + pow(end.y - start.y, 2) + pow(end.z - start.z, 2));
+  dur = vScatt / dist;
+  
+  return ns3::MilliSeconds(1000*dur);
+}
+
+ns3::Time createUASMobility(ns3::Ptr<ns3::Node> node, uint16_t scenario, ns3::Time duration)
+{
+  Ptr<MobilityModel> uasMob;
+  // set the mobility model
+//   double vTx = vScatt;
+  Time t_count = MilliSeconds (0);
+
+  if(scenario==0)
+    { 
+    uasMob = CreateObject<RandomWalk2dMobilityModel>();
+    uasMob->SetAttribute ("Bounds", RectangleValue (Rectangle (0, maxAxisX, 0, maxAxisY)));
+    uasMob->SetAttribute ("Speed", StringValue ("ns3::ConstantRandomVariable[Constant=" + std::to_string(vScatt) + "]"));
+    t_count = duration;
+    }
+  else
+    {
+    uasMob = CreateObject<WaypointMobilityModel> ();  
+    Vector vec1; Vector vec2;
+
+  switch(scenario)
+    {
+    case 1:
+      //Scenario: Out-and-back, diagonally, full enb coverage
+      vec1 = Vector(0 + 1*buildingSizeX + 0*streetWidth, 0 + 1*buildingSizeY + 0*streetWidth, buildingHeight);
+
+      vec2 = Vector(0 + 1*buildingSizeX + 0*streetWidth, 0 + 1*buildingSizeY + 0*streetWidth, buildingHeight);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      
+
+      vec1 = vec2;
+      vec2 = Vector (maxAxisX - 1*buildingSizeX - 0*streetWidth, 0 + 3*buildingSizeY + 2*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisX - streetWidth) / 2 / vTx);    
+      
+
+      vec1 = vec2;
+      vec2 = Vector ( 0 + 1*buildingSizeX + 0*streetWidth, 0 + 1*buildingSizeY + 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisX - streetWidth) / 2 / vTx);    
+      break;
+
+    case 2:
+      //Scenario: recangular loop, along street, within enb coverage
+      vec1 = Vector ( 0 + 1*buildingSizeX + 0.5*streetWidth, 0 + 1*buildingSizeY + 0.5*streetWidth, buildingHeight);
+
+      vec2 = Vector ( 0 + 1*buildingSizeX + 0.5*streetWidth, 0 + 1*buildingSizeY + 0.5*streetWidth, buildingHeight);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( maxAxisX - 1*buildingSizeX - 0.5*streetWidth, 0 + 1*buildingSizeY + 0.5*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( maxAxisX - 1*buildingSizeX - 0.5*streetWidth, 0 + 2*buildingSizeY + 1.5*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( 0 + 1*buildingSizeX + 0.5*streetWidth, 0 + 2*buildingSizeY + 1.5*streetWidth, buildingHeight); 
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( 0 + 1*buildingSizeX + 0.5*streetWidth, 0 + 1*buildingSizeY + 0.5*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      break;
+
+    case 3:
+      //Scenario: Traingular loop, along street, within enb coverage
+      vec1 = Vector ( 0 + 3*buildingSizeX + 2.5*streetWidth, 0 + 2.5*buildingSizeY + 2*streetWidth, buildingHeight);
+      
+      vec2 = Vector ( 0 + 3*buildingSizeX + 2.5*streetWidth, 0 + 2.5*buildingSizeY + 2*streetWidth, buildingHeight);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( 0 + 3*buildingSizeX + 2.5*streetWidth, 0 + 0.5*buildingSizeY + 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( 0 + 7.5*buildingSizeX + 7*streetWidth, 0 + 2.5*buildingSizeY + 2*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( 0 + 3*buildingSizeX + 2.5*streetWidth, 0 + 2.5*buildingSizeY + 2*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      break;
+
+    case 4:
+      //Scenario: out-and-back, diagonally, exits enb coverage
+      vec1 = Vector ( maxAxisX - 1.5*buildingSizeX - 1*streetWidth, 0 + 2.5*buildingSizeY + 2*streetWidth, buildingHeight);
+
+      vec2 = Vector ( maxAxisX - 1.5*buildingSizeX - 1*streetWidth, 0 + 2.5*buildingSizeY + 2*streetWidth, buildingHeight);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( 0 + 2.5*buildingSizeX + 2*streetWidth, maxAxisY - 1.5*buildingSizeY + 1*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( maxAxisX - 1.5*buildingSizeX - 1*streetWidth, 0 + 2.5*buildingSizeY + 2*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      break;
+
+    case 5:
+      //Scenario: Snake across complete map, in-and-out of coverage
+      vec1 = Vector ( 0 + 0.5*buildingSizeX + 0*streetWidth, maxAxisY - 0.5*buildingSizeY - 0*streetWidth, buildingHeight);
+
+      vec2 = Vector ( 0 + 0.5*buildingSizeX + 0*streetWidth, maxAxisY - 0.5*buildingSizeY - 0*streetWidth, buildingHeight);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( 0 + 0.5*buildingSizeX + 0*streetWidth, 0 + 0.5*buildingSizeY + 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
 
 
-int
-main (int argc, char *argv[])
+      vec2 = Vector ( 0 + 2.5*buildingSizeX + 2*streetWidth, 0 + 0.5*buildingSizeY + 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( 0 + 2.5*buildingSizeX + 2*streetWidth, maxAxisY - 0.5*buildingSizeY - 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+
+      vec2 = Vector ( 0 + 4.5*buildingSizeX + 4*streetWidth, maxAxisY - 0.5*buildingSizeY - 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( 0 + 4.5*buildingSizeX + 4*streetWidth, 0 + 0.5*buildingSizeY + 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+
+
+      vec2 = Vector ( 0 + 6.5*buildingSizeX + 6*streetWidth, 0 + 0.5*buildingSizeY + 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( 0 + 6.5*buildingSizeX + 6*streetWidth, maxAxisY - 0.5*buildingSizeY - 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+
+      vec2 = Vector ( 0 + 8.5*buildingSizeX + 8*streetWidth, maxAxisY - 0.5*buildingSizeY - 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( 0 + 8.5*buildingSizeX + 8*streetWidth, 0 + 0.5*buildingSizeY + 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+
+      vec2 = Vector ( 0 + 10.5*buildingSizeX + 10*streetWidth, 0 + 0.5*buildingSizeY + 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( 0 + 10.5*buildingSizeX + 10*streetWidth, maxAxisY - 0.5*buildingSizeY - 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+
+      vec2 = Vector ( 0 + 12.5*buildingSizeX + 12*streetWidth, maxAxisY - 0.5*buildingSizeY - 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( 0 + 12.5*buildingSizeX + 12*streetWidth, 0 + 0.5*buildingSizeY + 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+
+      vec2 = Vector ( 0 + 14.5*buildingSizeX + 14*streetWidth, 0 + 0.5*buildingSizeY + 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      vec1 = vec2;
+
+      vec2 = Vector ( 0 + 14.5*buildingSizeX + 14*streetWidth, maxAxisY - 0.5*buildingSizeY - 0*streetWidth, buildingHeight);
+      t_count += constAccelDuration(vec1, vec2);
+      uasMob->GetObject<WaypointMobilityModel> ()->AddWaypoint (Waypoint (t_count, vec2));
+      // t_count += Seconds ((maxAxisY - streetWidth) / 2 / vTx);
+      break;
+
+    default:
+      break;
+      }
+    }
+
+
+  node->AggregateObject (uasMob);
+  return t_count;
+//   return uasMob;
+}
+
+
+void createBSSMobility(ns3::Ptr<ns3::Node> node, ns3::Vector v)
+{
+  Ptr<MobilityModel> bssMob;  
+  // set the mobility model
+  bssMob = CreateObject<ConstantPositionMobilityModel>();
+  bssMob->SetPosition(v);
+  node->AggregateObject(bssMob);
+//   return bssMob;
+}
+
+
+void
+PrintGnuplottableBuildingListToFile 
+(std::string dirname, ns3::Ptr<ListPositionAllocator> enbPositionAlloc, ns3::Ptr<ListPositionAllocator> uePositionAlloc)
+{
+
+  //-----Log Building Positions-----//
+  std::ofstream outFile;
+  std::string filename = dirname + "/buildings.txt";
+  outFile.open (filename.c_str (), std::ios_base::out | std::ios_base::trunc);
+  if (!outFile.is_open ())
+    {
+      NS_LOG_ERROR ("Can't open file " << filename);
+      return;
+    }
+  
+  outFile << "building,rectFromX,rectFromY,rectToX,rectToY"<<std::endl;
+
+  uint32_t index = 0;
+  for (BuildingList::Iterator it = BuildingList::Begin (); it != BuildingList::End (); ++it)
+    {
+      ++index;
+      Box box = (*it)->GetBoundaries ();
+        outFile << index << "," << box.xMin  << "," << box.yMin
+              << ","   << box.xMax  << "," << box.yMax
+              << std::endl;
+    }
+  outFile.close();
+
+
+
+  //-----Log enb positions-----//
+  filename = dirname + "/enbs.txt";
+  outFile.open (filename.c_str (), std::ios_base::out | std::ios_base::trunc);
+  if (!outFile.is_open ())
+    {
+      NS_LOG_ERROR ("Can't open file " << filename);
+      return;
+    }
+  
+  outFile << "enb,X,Y,Z"<<std::endl;
+  for (uint32_t i = 0; i< enbPositionAlloc->GetSize(); i++)
+  {
+    {
+    ns3::Vector vec = enbPositionAlloc->GetNext();
+    outFile << i << ',' << vec.x << ',' << vec.y << ',' << vec.z << std::endl;
+    }
+  }
+  outFile.close();
+
+  //-----Log ue starting positions-----//
+  filename = dirname + "/ues.txt";
+  outFile.open (filename.c_str (), std::ios_base::out | std::ios_base::trunc);
+  if (!outFile.is_open ())
+    {
+      NS_LOG_ERROR ("Can't open file " << filename);
+      return;
+    }
+  
+  outFile << "ue,X,Y,Z"<<std::endl;
+  for (uint32_t i = 0; i< uePositionAlloc->GetSize(); i++)
+  {
+    {
+    ns3::Vector vec = enbPositionAlloc->GetNext();
+    outFile << i << ',' << vec.x << ',' << vec.y << ',' << vec.z << std::endl;
+    }
+  }
+  outFile.close();
+}
+
+class MyApp : public Application
+{
+public:
+
+  MyApp ();
+  virtual ~MyApp();
+
+  void Setup (Ptr<Socket> socket, Address address, uint32_t packetSize, uint32_t nPackets, DataRate dataRate);
+  void ChangePacketSize(uint32_t packetSize);
+
+private:
+  virtual void StartApplication (void);
+  virtual void StopApplication (void);
+
+  void LoadCSV (void);//load file
+  void packetRead(void);
+  void ScheduleTx (void);
+  void SendPacket (void);
+  
+
+  Ptr<Socket>           m_socket;
+  Address               m_peer;
+  uint32_t              m_packetSize;
+  uint32_t              m_nPackets;
+  DataRate              m_dataRate;
+  EventId               m_sendEvent;
+  bool                  m_running;
+  uint32_t              m_packetsSent;
+  std::vector<float>    v1;//store packet arrival time
+  std::vector<float>    v2;//store packet schedule time, used to schedule packet send
+  std::vector<int>      v3;//store packet size
+  int                   csv_size;//csv entry
+
+};
+
+MyApp::MyApp ()
+  : m_socket (0),
+    m_peer (),
+    m_packetSize (0),
+    m_nPackets (0),
+    m_dataRate (0),
+    m_sendEvent (),
+    m_running (false),
+    m_packetsSent (0)
+{
+}
+
+MyApp::~MyApp()
+{
+  m_socket = 0;
+}
+
+void
+MyApp::Setup (Ptr<Socket> socket, Address address, uint32_t packetSize, uint32_t nPackets, DataRate dataRate)//appId
+{
+  m_socket = socket;
+  m_peer = address;
+  m_packetSize = packetSize;
+  m_nPackets = nPackets;
+  m_dataRate = dataRate;
+  LoadCSV();//load CSV data from file
+}
+
+void
+MyApp::StartApplication (void)
+{
+  std::cout << "Start Application: " << std::endl;
+  m_running = true;
+  //m_packetsSent = 0;
+  m_packetsSent = 1;//+++ new
+  m_socket->Bind ();
+  m_socket->Connect (m_peer);//initiate connection with remote peer using socket
+  SendPacket ();
+}
+
+
+void
+MyApp::StopApplication (void)
+{
+  //std::cout << "Stop Application: " << std::endl;
+  m_running = false;
+
+  if (m_sendEvent.IsRunning ())
+    {
+      Simulator::Cancel (m_sendEvent);
+    }
+
+  if (m_socket)
+    {
+      m_socket->Close ();
+    }
+}
+//Helper method to change packe size 
+void 
+MyApp::ChangePacketSize(uint32_t packetSize) {
+    m_packetSize = packetSize;
+}
+
+void MyApp::packetRead()
+{
+//Helper method to load csv packet information into vectors
+    float x = 0.0;
+    int x1 = 0;
+    //adjust path string to host computer.
+    // CsvReader csv ("path to directory where file is/CSE-UDP1-Large.csv", ',');
+    CsvReader csv = CsvReader("~/src/ns-allinone-3.35/ns-3.35/build/scratch/CSE-UDP1-Large.csv", ',');
+    while (csv.FetchNextRow()) {  
+        csv.GetValue(0, x); //read time value
+        v1.push_back(x);//store in vector V1
+        csv.GetValue(1, x1); //read packet size value
+        v3.push_back(x1);//store in vector V3
+    }
+    csv_size = v1.size();// number of packets in file
+    v2.push_back(v1.at(0));
+    for (int i =1; i < csv_size; i++){
+       v2.push_back(v1.at(i) - v1.at(i-1)); //packet schedule time, store in vector v2
+    }
+}
+
+
+//Helper method to load csv packet information into vectors 
+void
+MyApp::LoadCSV(){//csv entry
+    float x = 0.0;
+    int x1 = 0;
+    //adjust path string to host computer.
+    // CsvReader csv ("/Users/rafaapaza/ns-allinone-3.35/ns-3.35/scratch/CSVRead/CSE-UDP1-Large.csv", ',');
+
+    // CsvReader csv("\\\\wsl.localhost\\\\Ubuntu-20.04\\\\home\\\\schimpfen\\\\src\\\\ns-allinone-3.35\\\\ns-3.35\\\\scratch\\\\CSE-UDP1-LARGE.csv",',');
+    CsvReader csv("/home/schimpfen/src/ns-allinone-3.35/ns-3.35/scratch/CSE-UDP1-LARGE.csv",',');
+    while (csv.FetchNextRow()) {  
+        csv.GetValue(0, x); //read time value
+        v1.push_back(x);//store in vector V1
+        csv.GetValue(1, x1); //read packet size value
+        v3.push_back(x1);//store in vector V3
+    }
+    csv_size = v1.size();// number of packets in file
+    v2.push_back(v1.at(0));
+    for (int i =1; i < csv_size; i++){
+       v2.push_back(v1.at(i) - v1.at(i-1)); //packet schedule time, store in vector v2
+    }
+}
+
+void
+MyApp::SendPacket (void)
+{
+  SeqTsHeader seqTs;
+  seqTs.SetSeq (m_packetsSent);
+  Ptr<Packet> packet = Create<Packet> (m_packetSize);
+  m_socket->Send (packet);
+
+  if (++m_packetsSent < m_nPackets)
+    {
+      ScheduleTx ();
+    }
+  //std::cout << "SendApp Time: " << Simulator::Now ().GetSeconds () << "\t" << "\t Sent Packet: " << m_packetsSent << "\t Pkt Size: " << m_packetSize << "\t" << "to :" << InetSocketAddress::ConvertFrom(m_peer).GetIpv4 () <<"\n"; 
+}
+
+bool variableBurst;
+bool toggle2 = true;
+int i_var = 0;//packet counter
+
+void
+MyApp::ScheduleTx (void)
+{
+  if (m_running)
+    {
+        if(i_var <= csv_size) { 
+            this ->ChangePacketSize(v3.at(i_var));//packet size update
+            Time tNext (Seconds (v2.at(i_var)));//schedule packet send
+            //std::cout << v2.at(i_var) << " " << i_var << std::endl;//test code
+            m_sendEvent = Simulator::Schedule (tNext, &MyApp::SendPacket, this);
+            i_var++;           
+      }
+    }
+}
+
+int main (int argc, char *argv[])
 {
   uint16_t numNodePairs = 2;
+  uint16_t scenario = 0;
   Time simTime = MilliSeconds (1100);
+  Time appEndTime = MilliSeconds (1000);
   double distance = 60.0;
   Time interPacketInterval = MilliSeconds (100);
   bool useCa = false;
-  bool disableDl = false;
+  bool disableDl = true;
   bool disableUl = false;
   bool disablePl = false;
+  bool tracing = false;
+
+  scenario = 3;
+  // simTime = MilliSeconds (0);
+  tracing = true;
 
   // Command line arguments
   CommandLine cmd (__FILE__);
@@ -44,6 +575,8 @@ main (int argc, char *argv[])
   cmd.AddValue ("disableDl", "Disable downlink data flows", disableDl);
   cmd.AddValue ("disableUl", "Disable uplink data flows", disableUl);
   cmd.AddValue ("disablePl", "Disable data flows between peer UEs", disablePl);
+  cmd.AddValue("tracing", "Enable Packet Capture", tracing);
+  cmd.AddValue("scenario", "UAS Flight Path", scenario);
   cmd.Parse (argc, argv);
 
   ConfigStore inputConfig;
@@ -86,6 +619,8 @@ main (int argc, char *argv[])
 
   Ipv4StaticRoutingHelper ipv4RoutingHelper;
   Ptr<Ipv4StaticRouting> remoteHostStaticRouting = ipv4RoutingHelper.GetStaticRouting (remoteHost->GetObject<Ipv4> ());
+  remoteHostStaticRouting->TraceConnectWithoutContext("Drop", MakeBoundCallback(&IpDropTrace, callbackFile));
+  remoteHostStaticRouting->TraceConnectWithoutContext("Tx", MakeBoundCallback(&ipTxTrace, callbackFile));
   remoteHostStaticRouting->AddNetworkRouteTo (Ipv4Address ("7.0.0.0"), Ipv4Mask ("255.0.0.0"), 1);
 
   NodeContainer ueNodes;
@@ -93,23 +628,36 @@ main (int argc, char *argv[])
   enbNodes.Create (numNodePairs);
   ueNodes.Create (numNodePairs);
 
-  // Install Mobility Model
-  Ptr<ListPositionAllocator> positionAlloc = CreateObject<ListPositionAllocator> ();
-  for (uint16_t i = 0; i < numNodePairs; i++)
-    {
-      positionAlloc->Add (Vector (distance * i, 0, 0));
-    }
-  MobilityHelper mobility;
-  mobility.SetMobilityModel("ns3::ConstantPositionMobilityModel");
-  mobility.SetPositionAllocator(positionAlloc);
-  mobility.Install(enbNodes);
-  mobility.Install(ueNodes);
+  std::cout<< "Adding Mobility" << std::endl;
 
+  // Set mobility, channel, propagation models
+  for(uint32_t i=0; i<ueNodes.GetN(); i++){
+    ns3::Time t_uas = createUASMobility(ueNodes.Get(i), scenario, simTime) + MilliSeconds(500);
+    if (t_uas > simTime) {simTime = t_uas;}
+  }
+  for(uint32_t i=0; i<enbNodes.GetN(); i++){
+    createBSSMobility(enbNodes.Get(i), Vector(distance*i,0,0));
+  }
+  
   // Install LTE Devices to the nodes
   NetDeviceContainer enbLteDevs = lteHelper->InstallEnbDevice (enbNodes);
   NetDeviceContainer ueLteDevs = lteHelper->InstallUeDevice (ueNodes);
+  
+
+  //------------------------------------------------------------//
+  //-------------Install LTE-V2V Channel Modelling--------------//
+  //------------------------------------------------------------//
+    std::cout << "LTE Models...Set Fading...";
+  // lteHelper->SetFadingModel("ns3::ThreeGPPV2vUrbanChannelModel");
+  lteHelper->SetFadingModel("ns3::ThreeGppChannelModel");
+  
+  lteHelper->SetSpectrumChannelType("ns3::ThreeGppChannelModel");
+  
+
+  
 
   // Install the IP stack on the UEs
+  std::cout << "installing UE Nodes" << std::endl;
   internet.Install (ueNodes);
   Ipv4InterfaceContainer ueIpIface;
   ueIpIface = epcHelper->AssignUeIpv4Address (NetDeviceContainer (ueLteDevs));
@@ -123,12 +671,17 @@ main (int argc, char *argv[])
     }
 
   // Attach one UE per eNodeB
+  std::cout<<"ATTACHING UE";
+  // uint16_t minNodes = std::min(ueLteDevs.GetN(), enbLteDevs.GetN());
+  // for (uint16_t i = 0; i < minNodes; i++)
   for (uint16_t i = 0; i < numNodePairs; i++)
     {
       lteHelper->Attach (ueLteDevs.Get(i), enbLteDevs.Get(i));
       // side effect: the default EPS bearer will be activated
     }
 
+
+  std::cout << "Installing UDP Echo Client/Server" << std::endl;
 
   // Install and start applications on UEs and remote host
   uint16_t dlPort = 1100;
@@ -143,24 +696,43 @@ main (int argc, char *argv[])
           PacketSinkHelper dlPacketSinkHelper ("ns3::UdpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), dlPort));
           serverApps.Add (dlPacketSinkHelper.Install (ueNodes.Get (u)));
 
-          UdpClientHelper dlClient (ueIpIface.GetAddress (u), dlPort);
-          dlClient.SetAttribute ("Interval", TimeValue (interPacketInterval));
+          // UdpClientHelper dlClient (ueIpIface.GetAddress (u), dlPort);
+          // dlClient.SetAttribute ("Interval", TimeValue (interPacketInterval));
+          // dlClient.SetAttribute ("MaxPackets", UintegerValue (1000000));
+          // clientApps.Add (dlClient.Install (remoteHost));
+          UdpEchoClientHelper dlClient (ueIpIface.GetAddress(u), dlPort);
           dlClient.SetAttribute ("MaxPackets", UintegerValue (1000000));
-          clientApps.Add (dlClient.Install (remoteHost));
+          dlClient.SetAttribute ("Interval", TimeValue(interPacketInterval));
+          dlClient.SetAttribute ("PacketSize", UintegerValue (1024));
+
+          ApplicationContainer clientApps = dlClient.Install(remoteHost);
         }
 
       if (!disableUl)
         {
           ++ulPort;
+          Address sinkAddress (InetSocketAddress (remoteHostAddr, ulPort));
+
           PacketSinkHelper ulPacketSinkHelper ("ns3::UdpSocketFactory", InetSocketAddress (Ipv4Address::GetAny (), ulPort));
           serverApps.Add (ulPacketSinkHelper.Install (remoteHost));
 
-          UdpClientHelper ulClient (remoteHostAddr, ulPort);
-          ulClient.SetAttribute ("Interval", TimeValue (interPacketInterval));
-          ulClient.SetAttribute ("MaxPackets", UintegerValue (1000000));
-          clientApps.Add (ulClient.Install (ueNodes.Get(u)));
+          // UdpClientHelper ulClient (remoteHostAddr, ulPort);
+          // ulClient.SetAttribute ("Interval", TimeValue (interPacketInterval));
+          // ulClient.SetAttribute ("MaxPackets", UintegerValue (1000000));
+          // clientApps.Add (ulClient.Install (ueNodes.Get(u)));
+
+          Ptr<Socket> ns3UdpSocket = Socket::CreateSocket (ueNodes.Get (u), UdpSocketFactory::GetTypeId ()); //Server at UE create socket
+          Ptr<MyApp> app2 = CreateObject<MyApp> ();
+          app2->Setup (ns3UdpSocket, sinkAddress, 1400, 2511, DataRate ("1Mbps"));//+++UE socket, peer address, pkt size 1400
+          ueNodes.Get (u)->AddApplication (app2);//+++connect app1 to ue: internetIpIfaces.GetAddress(0)
+
+          app2->SetStartTime (MilliSeconds (0));
+          app2->SetStopTime (appEndTime);
         }
 
+        //   ApplicationContainer clientApps = ulClient.Install(ueNodes.Get(u));
+        // }
+      // if (!disablePl && numMinNodes > 1)
       if (!disablePl && numNodePairs > 1)
         {
           ++otherPort;
@@ -170,22 +742,106 @@ main (int argc, char *argv[])
           UdpClientHelper client (ueIpIface.GetAddress (u), otherPort);
           client.SetAttribute ("Interval", TimeValue (interPacketInterval));
           client.SetAttribute ("MaxPackets", UintegerValue (1000000));
+          
           clientApps.Add (client.Install (ueNodes.Get ((u + 1) % numNodePairs)));
         }
     }
 
-  serverApps.Start (MilliSeconds (500));
-  clientApps.Start (MilliSeconds (500));
-  lteHelper->EnableTraces ();
-  // Uncomment to enable PCAP tracing
-  //p2ph.EnablePcapAll("lena-simple-epc");
+  /**************** FLOW MONITOR can track packet statistics at Layer 3 ********************/
+    /**************** FLOW MONITOR SETUP ********************/
+  Ptr<FlowMonitor> flowmon;
+  FlowMonitorHelper flowmonHelper;
+  if(tracing){
+    flowmon = flowmonHelper.InstallAll();
+    flowmon->CheckForLostPackets ();
+  }
 
+  serverApps.Start (MilliSeconds (50)); serverApps.Stop  (simTime);
+  clientApps.Start (MilliSeconds (50)); clientApps.Stop  (simTime);
+
+  
+  //--------------------------------------//
+  //----------SIMULATION LOGGING----------//
+  //--------------------------------------//
+  AsciiTraceHelper ascii;
+  if(tracing)
+  { 
+    //touch logfile
+    std::ofstream touchfile; 
+    touchfile.open(callbackFile, std::ios_base::openmode::_S_trunc);
+    if(!touchfile) {NS_LOG_ERROR("Cannot open " + callbackFile); exit(1);}
+    touchfile << "[" << std::endl;
+    touchfile.close();
+
+    //enable automated traces    
+    lteHelper->EnableTraces ();
+    p2ph.EnablePcapAll(PREFIX + "lena-simple-epc", true); 
+    p2ph.EnableAsciiAll(ascii.CreateFileStream(PREFIX + "uavsim.ascii"));
+
+
+    // IPV4 / UDP Traces
+    std::string udpClientPrefix = "/NodeList/*/ApplicationList/*/$ns3::UdpEchoClient/";
+    std::string udpServerPrefix = "/NodeList/*/ApplicationList/*/$ns3::UdpEchoServer/";
+    std::string udpSocketPrefix = "/NodeList/*/$ns3::UdpL4Protocol/SocketList/*/";
+    // std::string ipPrefix = "/NodeList/*/$ns3::Ipv4L3Protocol/";
+
+    // Config::ConnectWithoutContext(udpClientPrefix + "Rx", MakeBoundCallback(&UdpRxTrace, callbackFile));
+    // Config::ConnectWithoutContext(udpClientPrefix + "Tx", MakeBoundCallback(&UdpTxTrace, callbackFile));
+    // Config::ConnectWithoutContext(udpSocketPrefix + "Drop", MakeBoundCallback(&udpDropTrace, callbackFile));
+    // Config::ConnectWithoutContext(udpServerPrefix + "Rx", MakeCallback(&UdpRxTrace));
+    // Config::Connect(ipPrefix + "Drop", MakeCallback(&IpDropTrace));
+    // Config::Connect(ipPrefix + "Tx", MakeCallback(&ipTxTrace));
+    
+    
+    // Config::Connect("/NodeList/*/ApplicationList/*/$ns3::UdpEchoClient/RxWithAddresses", MakeCallback(&RxTrace));
+
+    //RLC/RRC Traces
+    std::string ueRrcPrefix = "/NodeList/*/DeviceList/*/$ns3::LteUeNetDevice/LteUeRrc/";
+    std::string enbRrcPrefix = "/NodeList/*/DeviceList/*/$ns3::LteEnbNetDevice/LteEnbRrc/" ;
+    std::string lteRlcPrefix = "/NodeList/*/TxDrop/DeviceList/$nse::LteNetDevice/LteUeRrc/DataRadioBearerMap/*/LteRlc/";
+    
+    // Config::ConnectWithoutContext(lteRlcPrefix + "RxDrop", MakeCallback(&TxDropTrace));
+    Config::ConnectWithoutContext(ueRrcPrefix + "HandoverStart", MakeBoundCallback(&HandoverStartTrace, callbackFile));
+    Config::ConnectWithoutContext(ueRrcPrefix + "HandoverEndOk", MakeBoundCallback(&HandoverEndOkTrace, callbackFile));
+    Config::ConnectWithoutContext(ueRrcPrefix + "HandoverEndError", MakeBoundCallback(&HandoverEndErrorTrace, callbackFile));
+    // Config::ConnectWithoutContext(enbRrcPrefix + "ConnectionTimeout", MakeCallback(&RrcTimeoutTrace));
+    Config::ConnectWithoutContext(ueRrcPrefix + "StateTransition", MakeBoundCallback(&StateTransitionTrace, callbackFile));
+    Config::ConnectWithoutContext(ueRrcPrefix + "InitialCellSelectionEndError", MakeBoundCallback(&InitCellSelectErrTrace, callbackFile));
+    Config::ConnectWithoutContext(ueRrcPrefix + "ConnectionTimeout", MakeBoundCallback(&ConnectionTimeoutTrace, callbackFile));
+
+
+    // //MAC and PHY Traces
+    std::string uePhyPrefix = "/NodeList/*/DeviceList/*/$ns3::LteUeNetDevice/ComponentCarrierMapUe/*/LteUePhy/";
+    std::string lteSpectrumPrefixDl =  "/NodeList/*/DeviceList/*/$ns3::LteUeNetDevice/ComponentCarrierMapUe/*/LteUePhy/DlSpectrumPhy/" ;
+    std::string lteSpectrumPrefixUl =  "/NodeList/*/DeviceList/*/$ns3::LteUeNetDevice/ComponentCarrierMapUe/*/LteUePhy/UlSpectrumPhy/" ;
+    std::string lteMacPrefix = "/NodeList/*/DeviceList/*/$ns3::LteUeNetDevice/ComponentCarrierMapUe/*/LteUeMac/";
+
+    Config::ConnectWithoutContext(lteMacPrefix + "RaResponseTimeout", MakeBoundCallback(&RaResponseTimeoutTrace, callbackFile));
+    Config::ConnectWithoutContext(uePhyPrefix + "ReportUeMeasurements", MakeBoundCallback(&UeMeasTrace, callbackFile));
+    Config::ConnectWithoutContext(uePhyPrefix + "ReportCurrentCellRsrpSinr", MakeBoundCallback(&CellRsrpSinrTrace, callbackFile));
+    Config::ConnectWithoutContext(lteSpectrumPrefixDl + "RxEndError", MakeBoundCallback(&RxEndErrorTrace, callbackFile));
+    Config::ConnectWithoutContext(lteSpectrumPrefixUl + "RxEndError", MakeBoundCallback(&RxEndErrorTrace, callbackFile));
+    // Config::ConnectWithoutContext("dl", MakeCallback(&HandoverEndOkTrace));
+    }
+
+  std::cout << "running.....";
   Simulator::Stop (simTime);
   Simulator::Run ();
+  std::cout << "\t Done!" << std::endl;
 
   /*GtkConfigStore config;
   config.ConfigureAttributes();*/
 
   Simulator::Destroy ();
+
+  if(tracing){
+    flowmon->SerializeToXmlFile(PREFIX + "uavsim.flowmon", true, true);
+
+    std::ofstream touchfile; std::fstream readfile;
+    touchfile.open(callbackFile, std::ios_base::openmode::_S_app);
+    if(!touchfile) {NS_LOG_ERROR("Cannot open " + callbackFile); exit(1);}
+    touchfile << std::endl << "]";
+    touchfile.close();
+    }
   return 0;
 }

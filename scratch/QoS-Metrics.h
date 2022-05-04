@@ -11,7 +11,7 @@ NS_LOG_COMPONENT_DEFINE ("FinalProject");
 
 static std::string PREFIX = "scratchlogs/uavsim/";
 static std::string callbackFile = PREFIX + "uavsimCallbacks.json";
-
+static long recv_counter = 0;
 // // See link for available trace sources, callback selection 
 // // https://www.nsnam.org/docs/release/3.35/doxygen/_trace_source_list.html
 
@@ -109,6 +109,22 @@ void ipTxTrace (std::string outfile, Ptr<const Packet> pkt, Ptr<Ipv4> ip, uint32
 //   std::stringbuf os;
 //   std::ostream argpass = std::ostream(&os);
 //   argpass << "\"Time\", " << "\"" << Simulator::Now() << "\"" << ", \"Event\", \"UDP TX\", \"Size\", " << pkt->GetSize();
+//   std::cout << "Packet TX: " << pkt << std::endl;
+//   toJson(&argpass, outfile);
+// }
+static void ipRxTrace (std::string outfile, Ptr<const Packet> pck, Ptr<Ipv4> ip, uint32_t uin)
+{
+  std::stringbuf os;
+  std::ostream argpass = std::ostream(&os);
+  argpass << "\"Time\", " << "\"" << Simulator::Now() << "\"" << ", \"Event\", \"IP RX\", \"Source\", \"" << ip->GetAddress(1,0).GetAddress() << "\", \"Size\", " << pck->GetSize();
+  toJson(&argpass, outfile);
+}
+// static void RcvPacketWAddr(std::string outfile, const Ptr<const Packet> pkt, const Address &src, const Address &dst)
+// {
+//   std::stringbuf os;
+//   std::ostream argpass = std::ostream(&os);
+//   argpass << "\"Time\", \"" << Simulator::Now() << "\", \"Event\", \"RX Packet\", \"Source\", \"" << (InetSocketAddress::ConvertFrom(src)).GetIpv4().Get()
+//    << "\", \"Destination\", \"" << InetSocketAddress::ConvertFrom(dst).GetIpv4() <<  "\", \"Size\", " << pkt->GetSize();
 //   toJson(&argpass, outfile);
 // }
 
@@ -239,8 +255,9 @@ UeMeasTrace(std::string outfile, uint16_t rnti, uint16_t cellId, double rsrp, do
 {
   std::stringbuf os;
   std::ostream argpass = std::ostream(&os);
-  argpass << "\"Time\", " << "\"" << Simulator::Now() << "\"" << ", \"Event\", \"UE PHY Measurement Report\", \"CellID\", " << cellId 
-      << ", \"isServing\", " << isServingCell << ", \"RSRQ\", " << rsrq;
+  argpass << "\"Time\", " << "\"" << Simulator::Now() << "\"" << ", \"Event\", \"UE PHY Measurement Report\", \"RNTI\", " << rnti 
+      << ", \"CellID\", " << cellId  << ", \"isServing\", " << isServingCell << ", \"Component Carrier ID\", " << compCarrierId
+      << ", \"RSRP\", " << rsrp << ", \"RSRQ\", " << rsrq;
   toJson(&argpass, outfile);
 }
 
@@ -262,5 +279,27 @@ RxEndErrorTrace(std::string outfile, ns3::Ptr<const Packet> pckt)
 
   argpass << "\"Time\", " << "\"" << Simulator::Now() << "\"" << ", \"Event\", \"Spectrum PHY RX End ERR\"";
   
+  toJson(&argpass, outfile);
+}
+
+
+void RcvPacket(std::string outfile, Ptr<const Packet> p, const Address &addr){
+  std::stringbuf os;
+  std::ostream argpass = std::ostream(&os);
+  char application[20]="";
+  int  currentSequenceNumber = 0;
+  // currentSequenceNumber = recv_counter++;
+  // IF source address matches sender address, increment packet count
+    if(InetSocketAddress::ConvertFrom(addr).GetIpv4().Get() == Ipv4Address("10.1.3.1").Get()){
+          currentSequenceNumber = recv_counter++;
+          strcpy(application, "\"VIDEO\"");
+  }else{
+          strcpy(application, "\"eNB Loading\"");
+  }
+  
+  argpass << "\"Time\", " << "\"" << Simulator::Now() << "\"" << ", \"Event\", \"APP Packet Received\", " 
+          << "\"Application\", " << application << ", \"Sequence\", " << currentSequenceNumber << ", \"Size\", " << p->GetSize() 
+          << ", \"Source addr\", \"" << InetSocketAddress::ConvertFrom(addr).GetIpv4() 
+          << "\", \"Source Port\", " << InetSocketAddress::ConvertFrom(addr).GetPort();
   toJson(&argpass, outfile);
 }
