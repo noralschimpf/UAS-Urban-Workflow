@@ -329,17 +329,21 @@ void RcvPacket(std::string outfile, Ptr<const Packet> p, const Address &addr){
     txBuffer[i] = (uint8_t)FILLERSTRING[i];
   }
   // txBuffer = (uint8_t *)FILLERSTRING.substr(0,p->GetSize()).c_str();
+  // #ifdef DEBUG
   uint32_t size = p-> CopyData(rxBuffer, p->GetSize());
+  // #endif
   double psnr = 0.0;
   if (srcaddr == Ipv4Address("7.0.0.2")){
     psnr = PSNR(txBuffer, rxBuffer, p->GetSize());
     
   }
+  // #ifdef DEBUG
   std::cout << "PACKET RECEIVED\tSRC: " << srcaddr << "\tSIZE " << size << "\tPSNR " << psnr << std::endl;
+  // #endif
 
   argpass << "\"Time\", " << "\"" << Simulator::Now() << "\"" << ", \"Event\", \"APP Packet Received\", " 
           << "\"Application\", " << application << ", \"Sequence\", " << currentSequenceNumber << ", \"Size\", " << p->GetSize() 
           << ", \"Source addr\", \"" << srcaddr << "\", \"Source Port\", " << InetSocketAddress::ConvertFrom(addr).GetPort()
-          << "PSNR: " << psnr;
+          << ", \"PSNR\", " << psnr;
   toJson(&argpass, outfile);
 }

@@ -32,7 +32,7 @@ def main():
      
     # Track X-Y Coordinate System relative to predefined building and axis measures
     buildingSizeX, streetWidth, buildingSizeY, buildingHeight = 250-3.5 * 2 - 3, 20, 433 - 3.5 * 2 - 3, 10
-    maxAxisX, maxAxisY = 4000, 3100
+    maxAxisX, maxAxisY = 4000, 2000
     numBuildingsX, numBuildingsY = maxAxisX / (buildingSizeX + streetWidth), maxAxisY / (buildingSizeX + streetWidth)
     
     # Predefined Scenario Routes from mobility update (branch: nora)

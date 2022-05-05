@@ -230,83 +230,84 @@ def main(argv):
     for sim in sim_list:
         for flow in sim.flows:
             t = flow.fiveTuple
-            proto = {6: 'TCP', 17: 'UDP'} [t.protocol]
-            print("\nFlowID: %i (%s %s/%s --> %s/%i)" % \
-                (flow.flowId, proto, t.sourceAddress, t.sourcePort, t.destinationAddress, t.destinationPort))
+            if t.sourceAddress == '7.0.0.2':
+                proto = {6: 'TCP', 17: 'UDP'} [t.protocol]
+                print("\nFlowID: %i (%s %s/%s --> %s/%i)" % \
+                    (flow.flowId, proto, t.sourceAddress, t.sourcePort, t.destinationAddress, t.destinationPort))
 
-            print("\tThrougput Metrics")
-            tx_bits, rx_bits = "None", "None"
-            txByte, rxByte = "None", "None"
-            txPack, rxPack = "None", "None"
+                print("\tThrougput Metrics")
+                tx_bits, rx_bits = "None", "None"
+                txByte, rxByte = "None", "None"
+                txPack, rxPack = "None", "None"
 
-            if not flow.txBitrate is None: tx_bits = "{:.2f} kbit/s".format(flow.txBitrate*1e-3)
-            if not flow.rxBitrate is None: rx_bits = "{:.2f} kbit/s".format(flow.rxBitrate*1e-3)
-            print("\t\tBitrate:\tTX {}\tRX {}".format(tx_bits, rx_bits))
-            if not flow.txBytes is None: txByte = "{:.2f} kB".format(flow.txBytes*1e-3)
-            if not flow.rxBytes is None: rxByte = "{:.2f} kB".format(flow.rxBytes*1e-3)
-            print("\t\tTotal Bytes:\tTX {}\t\tRX {}".format(txByte, rxByte))
-            if not flow.txPackets is None: txPack = "{}".format(flow.txPackets)
-            if not flow.rxPackets is None: rxPack = "{}".format(flow.rxPackets)
-            print("\t\tTotal Packets:\tTX {} \t\t\tRX {}".format(txPack, rxPack))
-
-
-
-            print("\tLoss Metrics")
-            packDrop, byteDrop = "None", "None"
-            packLost, lossRate = "None", "None"
-            if not flow.packetsDropped is None: packDrop = "{}".format(flow.packetsDropped)
-            if not flow.bytesDropped is None: byteDrop = "{}".format(flow.bytesDropped)
-            if not flow.lostPackets is None: packLost = "{}".format(flow.lostPackets)
-            if not flow.packetLossRatio is None: lossRate = "{:.2} %".format(flow.packetLossRatio*100)
-            print("\t\tDropped\t\tPackets: {}\t\tBytes: {}".format(packDrop, byteDrop))
-            print("\t\tLost Packets:\t{}\t\t\tRatio: {}".format(packLost, lossRate))
+                if not flow.txBitrate is None: tx_bits = "{:.2f} kbit/s".format(flow.txBitrate*1e-3)
+                if not flow.rxBitrate is None: rx_bits = "{:.2f} kbit/s".format(flow.rxBitrate*1e-3)
+                print("\t\tBitrate:\tTX {}\tRX {}".format(tx_bits, rx_bits))
+                if not flow.txBytes is None: txByte = "{:.2f} kB".format(flow.txBytes*1e-3)
+                if not flow.rxBytes is None: rxByte = "{:.2f} kB".format(flow.rxBytes*1e-3)
+                print("\t\tTotal Bytes:\tTX {}\t\tRX {}".format(txByte, rxByte))
+                if not flow.txPackets is None: txPack = "{}".format(flow.txPackets)
+                if not flow.rxPackets is None: rxPack = "{}".format(flow.rxPackets)
+                print("\t\tTotal Packets:\tTX {} \t\t\tRX {}".format(txPack, rxPack))
 
 
 
+                print("\tLoss Metrics")
+                packDrop, byteDrop = "None", "None"
+                packLost, lossRate = "None", "None"
+                if not flow.packetsDropped is None: packDrop = "{}".format(flow.packetsDropped)
+                if not flow.bytesDropped is None: byteDrop = "{}".format(flow.bytesDropped)
+                if not flow.lostPackets is None: packLost = "{}".format(flow.lostPackets)
+                if not flow.packetLossRatio is None: lossRate = "{:.2} %".format(flow.packetLossRatio*100)
+                print("\t\tDropped\t\tPackets: {}\t\tBytes: {}".format(packDrop, byteDrop))
+                print("\t\tLost Packets:\t{}\t\t\tRatio: {}".format(packLost, lossRate))
 
-            print("\tDelay Metrics")
-            delSum, jitSum = "None", "None"
-            # delMean, jitMean = "None", "None"
-            # delStd, jitStd = "None", "None"
-            
-            if not flow.delaySum is None: delSum = "{:.2f} ms".format(flow.delaySum*1e3)
-            if not flow.jitterSum is None: jitSum = "{:.2e} ms".format(flow.jitterSum*1e3)
-            print("\t\tSum Delay {}\t\t\tSum Jitter: {}".format(delSum, jitSum))
-            fig, ax = plt.subplots(1,2)
-            if not flow.delayHist is None: 
-                start, width, count = [], [], []
-                for x in flow.delayHist.bins: start.append(x[0]*1e3); width.append(x[1]*1e3); count.append(x[2])
-                ax[0].bar(x=start, height=count, width=width, label="Delay", alpha=.5)
-            if not flow.jitterHist is None:
-                start, width, count = [], [], []
-                for x in flow.jitterHist.bins: start.append(x[0]*1e3); width.append(x[1]*1e3); count.append(x[2])
-                ax[1].bar(x=start, height=count, width=width, label="Jitter", alpha=.5)
-            # ax.legend()
-            title = "Flow" + str(flow.flowId) + " Delay and Jitter Histograms"
-            fig.suptitle(title)
-            ax[0].set_xlabel("Delay (ms)"); ax[0].set_ylabel("count")
-            ax[1].set_xlabel("Jitter (ms)")
-            fig.savefig(outdir + title + ".png", dpi=300)
-            fig.clf(); ax[0].cla(); ax[1].cla(); plt.close()
-            
-            
-            # else:
-            #     print("\t\tTX bitrate: %.2f kbit/s" % (flow.txBitrate*1e-3,))
 
-            # if flow.rxBitrate is None:
-            #     print("\tRX bitrate: None")
-            # else:
-            #     print("\tRX bitrate: %.2f kbit/s" % (flow.rxBitrate*1e-3,))
 
-            # if flow.delayMean is None:
-            #     print("\tMean Delay: None")
-            # else:
-            #     print("\tMean Delay: %.2f ms" % (flow.delayMean*1e3,))
 
-            # if flow.packetLossRatio is None:
-            #     print("\tPacket Loss Ratio: None")
-            # else:
-            #     print("\tPacket Loss Ratio: %.2f %%" % (flow.packetLossRatio*100))
+                print("\tDelay Metrics")
+                delSum, jitSum = "None", "None"
+                # delMean, jitMean = "None", "None"
+                # delStd, jitStd = "None", "None"
+                
+                if not flow.delaySum is None: delSum = "{:.2f} ms".format(flow.delaySum*1e3)
+                if not flow.jitterSum is None: jitSum = "{:.2e} ms".format(flow.jitterSum*1e3)
+                print("\t\tSum Delay {}\t\t\tSum Jitter: {}".format(delSum, jitSum))
+                fig, ax = plt.subplots(1,2)
+                if not flow.delayHist is None: 
+                    start, width, count = [], [], []
+                    for x in flow.delayHist.bins: start.append(x[0]*1e3); width.append(x[1]*1e3); count.append(x[2])
+                    ax[0].bar(x=start, height=count, width=width, label="Delay", alpha=.5)
+                if not flow.jitterHist is None:
+                    start, width, count = [], [], []
+                    for x in flow.jitterHist.bins: start.append(x[0]*1e3); width.append(x[1]*1e3); count.append(x[2])
+                    ax[1].bar(x=start, height=count, width=width, label="Jitter", alpha=.5)
+                # ax.legend()
+                title = "Flow" + str(flow.flowId) + " Delay and Jitter Histograms"
+                fig.suptitle(title)
+                ax[0].set_xlabel("Delay (ms)"); ax[0].set_ylabel("count")
+                ax[1].set_xlabel("Jitter (ms)")
+                fig.savefig(outdir + title + ".png", dpi=300)
+                fig.clf(); ax[0].cla(); ax[1].cla(); plt.close()
+                
+                
+                # else:
+                #     print("\t\tTX bitrate: %.2f kbit/s" % (flow.txBitrate*1e-3,))
+
+                # if flow.rxBitrate is None:
+                #     print("\tRX bitrate: None")
+                # else:
+                #     print("\tRX bitrate: %.2f kbit/s" % (flow.rxBitrate*1e-3,))
+
+                # if flow.delayMean is None:
+                #     print("\tMean Delay: None")
+                # else:
+                #     print("\tMean Delay: %.2f ms" % (flow.delayMean*1e3,))
+
+                # if flow.packetLossRatio is None:
+                #     print("\tPacket Loss Ratio: None")
+                # else:
+                #     print("\tPacket Loss Ratio: %.2f %%" % (flow.packetLossRatio*100))
 
 
 if __name__ == '__main__':
